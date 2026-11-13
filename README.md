@@ -116,9 +116,9 @@ Cada plataforma utiliza um Actor específico verificado na Apify Store, com seu 
 
 | Plataforma | Actor ID Oficial | Arquivo de Configuração | Capacidades |
 |---|---|---|---|
-| **YouTube** | `streamers/youtube-scraper` (e `streamers/youtube-comments-scraper`) | `config/actors/youtube.json` | Pesquisa vídeos por `searchQueries` e coleta metadados e comentários públicos |
-| **Instagram** | `apify/instagram-scraper` | `config/actors/instagram.json` | Pesquisa publicações públicas por termo/hashtag (`search`) e extrai legendas e métricas |
-| **Reddit** | `trudax/reddit-scraper-lite` | `config/actors/reddit.json` | Pesquisa publicações e comentários públicos em conjunto via `searches` |
+| **YouTube** | `streamers/youtube-scraper` e `streamers/youtube-comments-scraper` | `config/actors/youtube.json` | Pesquisa vídeos por `searchQueries` e coleta metadados e comentários públicos |
+| **Instagram** | `apify/instagram-hashtag-scraper` (e `apify/instagram-scraper`) | `config/actors/instagram.json` | Pesquisa publicações públicas por hashtags/termos de negócio (`hashtags`) e extrai legendas, métricas e `latestComments` |
+| **Reddit** | `automation-lab/reddit-scraper` | `config/actors/reddit.json` | Pesquisa publicações e comentários públicos via `searchQuery` sem exigir `sessionToken` |
 
 ### Palavras-chave iniciais configuradas
 - `Sistema ERP`
@@ -211,7 +211,7 @@ python main.py --hive
 
 Os arquivos HiveQL estão organizados em:
 - `hive/criar_tabela.hql`: DDL da tabela externa com `OpenCSVSerde` sobre `/projeto_integrador/dados_tratados/multiplataforma`.
-- `hive/consultas.hql`: Contém **10 consultas executáveis em HiveQL** (as 5 obrigatórias + 5 adicionais):
+- `hive/consultas.hql`: Contém **12 consultas executáveis em HiveQL** (as 5 obrigatórias + 7 adicionais):
   1. Distribuição de registros por plataforma;
   2. Distribuição de sentimentos;
   3. Assuntos mais recorrentes;
@@ -221,7 +221,9 @@ Os arquivos HiveQL estão organizados em:
   7. Distribuição dos assuntos por plataforma;
   8. Frequência de problemas relacionados a suporte;
   9. Frequência de problemas relacionados à implantação;
-  10. Top registros com maior quantidade de curtidas ou votos por plataforma.
+  10. Top registros com maior quantidade de curtidas ou votos por plataforma;
+  11. Funcionalidades e módulos de ERP mais demandados no mercado;
+  12. Principais dores e gargalos operacionais relatados pelos usuários.
 
 ---
 

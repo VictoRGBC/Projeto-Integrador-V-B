@@ -1,6 +1,8 @@
 """
 Dashboard Executivo de Inteligência de Mercado Multiplataforma — Integra Engenharia de Sistemas.
 Desenvolvido com Streamlit e Plotly (Seção 8).
+Inclui análise aprofundada de assuntos mais falados, funcionalidades a implementar,
+dores operacionais do mercado e matriz de recomendações para a Integra.
 """
 
 from pathlib import Path
@@ -11,13 +13,23 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-# Garante que a raiz do projeto esteja no sys.path ao executar `streamlit run dashboard/app.py`
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from config.settings import HIVE_DIR, PROCESSED_CSV_PATH
-from hive.executar_hive import HIVE_RESULTS_DIR, verificar_hive_disponivel
+from hadoop.scripts.enviar_hdfs import executar_fluxo_hdfs
+from hive.executar_hive import (
+    HIVE_RESULTS_DIR,
+    NOMES_CONSULTAS,
+    executar_fluxo_hive,
+    verificar_hive_disponivel,
+)
+from processamento.gerar_insights import (
+    explodir_campo_multivalorado,
+    gerar_plano_recomendacoes,
+    gerar_sintese_executiva,
+)
 from processamento.tratar_dados import carregar_dados_tratados, executar_tratamento_completo
 
 CORES_SENTIMENTO = {
@@ -93,7 +105,6 @@ def renderizar_dashboard() -> None:
         initial_sidebar_state="expanded",
     )
 
-    # Cabeçalho Institucional BI
     st.markdown(
         """
         <div style="background: linear-gradient(90deg, #0F172A 0%, #1E293B 100%);
@@ -113,12 +124,14 @@ def renderizar_dashboard() -> None:
 
     df_bruto, fonte_ativa = carregar_fonte_dados()
 
-    # Barra Lateral: Atualização, Metodologia e Filtros
     with st.sidebar:
         st.header("⚙️ Controle e Filtros")
-        if st.button("🔄 Atualizar / Reprocessar Dados", use_container_width=True):
-            with st.spinner("Consolidando arquivos brutos em dados tratados..."):
-                executar_tratamento_completo()
+        if st.button("🔄 Atualizar Tratamento, HDFS e Hive", use_container_width=True):
+            with st.spinner("Reprocessando dados brutos, atualizando HDFS e consultas HiveQL..."):
+                df_novo = executar_tratamento_completo()
+                if not df_novo.empty:
+                    executar_fluxo_hdfs()
+                    executar_fluxo_hive()
             st.rerun()
 
         st.caption(f"**Fonte ativa:** {fonte_ativa}")
@@ -135,7 +148,7 @@ def renderizar_dashboard() -> None:
                    ```bash
                    python main.py --pipeline
                    ```
-                3. Clique em **Atualizar / Reprocessar Dados** acima.
+                3. Clique em **Atualizar Tratamento, HDFS e Hive** acima.
                 """
             )
             st.stop()
@@ -160,7 +173,6 @@ def renderizar_dashboard() -> None:
             "Sentimento (Heurístico)", options=opcoes_sent, default=opcoes_sent
         )
 
-        # Filtro de Período
         datas_validas = pd.to_datetime(
             df_bruto["data_publicacao"], utc=True, errors="coerce"
         ).dropna()
@@ -180,8 +192,8 @@ def renderizar_dashboard() -> None:
 
         st.divider()
         st.info(
-            "ℹ️ **Nota Metodológica:** A classificação de sentimentos e temas utiliza "
-            "**heurística exploratória baseada em léxico de palavras-chave**. "
+            "ℹ️ **Nota Metodológica:** A classificação de sentimentos, assuntos, funcionalidades e dores "
+            "utiliza **heurística exploratória baseada em léxico de palavras-chave e expressões contextuais**. "
             "Os dados representam uma amostra pública exploratória do mercado de sistemas "
             "de gestão (ERP) e não constituem opinião direta sobre a Integra Engenharia de Sistemas."
         )
@@ -199,11 +211,13 @@ def renderizar_dashboard() -> None:
         st.warning("Nenhum registro corresponde aos filtros selecionados na barra lateral.")
         st.stop()
 
+    sintese = gerar_sintese_executiva(df)
+
     aba1, aba2, aba3 = st.tabs(
         [
             "📈 ABA 1 — Visão Geral",
-            "🎯 ABA 2 — Análise de Mercado",
-            "📋 ABA 3 — Detalhamento e Auditoria",
+            "🎯 ABA 2 — Análise de Mercado, Funcionalidades e Recomendações",
+            "📋 ABA 3 — Detalhamento e Consultas HiveQL",
         ]
     )
 
@@ -223,8 +237,36 @@ def renderizar_dashboard() -> None:
         c2.metric("Plataformas Analisadas", f"{total_plataformas}")
         c3.metric("Publicações", f"{qtd_publicacoes:,}".replace(",", "."))
         c4.metric("Comentários", f"{qtd_comentarios:,}".replace(",", "."))
-        c5.metric("Registros Positivos", f"{qtd_positivos:,}".replace(",", "."))
-        c6.metric("Registros Negativos", f"{qtd_negativos:,}".replace(",", "."))
+        c5.metric(
+            "Registros Positivos",
+            f"{qtd_positivos:,}".replace(",", "."),
+            f"{sintese['taxa_positividade']}%",
+        )
+        c6.metric(
+            "Registros Negativos",
+            f"{qtd_negativos:,}".replace(",", "."),
+            f"-{sintese['taxa_negatividade']}%",
+            delta_color="inverse",
+        )
+
+        # Destaques Executivos Rápidos
+        st.markdown("#### 💡 Destaques Executivos Extraídos da Amostra")
+        d1, d2, d3 = st.columns(3)
+        with d1:
+            st.success(
+                f"**Assunto Mais Falado:**\n\n{sintese['assunto_lider']} "
+                f"({sintese['assunto_lider_qtd']} registros)"
+            )
+        with d2:
+            st.info(
+                f"**Funcionalidade Mais Demandada:**\n\n{sintese['funcionalidade_lider']} "
+                f"({sintese['funcionalidade_lider_qtd']} menções)"
+            )
+        with d3:
+            st.warning(
+                f"**Principal Dor / Gargalo Identificado:**\n\n{sintese['dor_lider']} "
+                f"({sintese['dor_lider_qtd']} menções)"
+            )
 
         st.divider()
 
@@ -297,55 +339,115 @@ def renderizar_dashboard() -> None:
         st.plotly_chart(fig_kw, use_container_width=True)
 
     # =========================================================================
-    # ABA 2 — ANÁLISE DE MERCADO
+    # ABA 2 — ANÁLISE DE MERCADO, FUNCIONALIDADES E RECOMENDAÇÕES
     # =========================================================================
     with aba2:
+        st.subheader("1. Assuntos Mais Falados e Dificuldades Relatadas no Mercado")
         col_m1, col_m2 = st.columns(2)
 
         with col_m1:
             df_temas = (
-                df.groupby("assunto", as_index=False)
+                df.groupby(["assunto", "sentimento"], as_index=False)
                 .size()
                 .rename(columns={"size": "quantidade"})
-                .sort_values("quantidade", ascending=True)
             )
             fig_temas = px.bar(
                 df_temas,
                 x="quantidade",
                 y="assunto",
+                color="sentimento",
                 orientation="h",
-                title="Temas Mais Recorrentes no Mercado de Sistemas Empresariais",
-                labels={"quantidade": "Registros", "assunto": "Assunto Principal"},
+                title="Assuntos Mais Recorrentes por Sentimento",
+                labels={
+                    "quantidade": "Registros",
+                    "assunto": "Assunto Principal",
+                    "sentimento": "Sentimento",
+                },
+                color_discrete_map=CORES_SENTIMENTO,
                 text_auto=True,
-                color_discrete_sequence=["#0284C7"],
             )
-            fig_temas.update_layout(height=400)
+            fig_temas.update_layout(height=410, yaxis={"categoryorder": "total ascending"})
             st.plotly_chart(fig_temas, use_container_width=True)
 
         with col_m2:
-            df_dificuldades = df[df["sentimento"] == "Negativo"]
-            if not df_dificuldades.empty:
-                df_dif_grp = (
-                    df_dificuldades.groupby("assunto", as_index=False)
-                    .size()
-                    .rename(columns={"size": "quantidade"})
-                    .sort_values("quantidade", ascending=True)
-                )
+            df_dores = explodir_campo_multivalorado(df, "dores_relatadas")
+            if not df_dores.empty:
+                df_dores_plot = df_dores.sort_values("mencoes", ascending=True)
                 fig_dif = px.bar(
-                    df_dif_grp,
-                    x="quantidade",
-                    y="assunto",
+                    df_dores_plot,
+                    x="mencoes",
+                    y="item",
                     orientation="h",
-                    title="Principais Dificuldades Relatadas (Registros com Sentimento Negativo)",
-                    labels={"quantidade": "Relatos Negativos", "assunto": "Categoria de Problema"},
+                    title="Principais Dores e Gargalos Operacionais Relatados pelos Usuários",
+                    labels={
+                        "mencoes": "Menções nos Registros",
+                        "item": "Dor / Gargalo Identificado",
+                    },
                     text_auto=True,
                     color_discrete_sequence=["#DC2626"],
                 )
-                fig_dif.update_layout(height=400)
+                fig_dif.update_layout(height=410)
                 st.plotly_chart(fig_dif, use_container_width=True)
             else:
-                st.info("Não há registros classificados como Negativo no recorte atual.")
+                st.info("Não foram identificadas dores específicas no recorte selecionado.")
 
+        st.divider()
+        st.subheader("2. Funcionalidades e Módulos Mais Demandados / a Implementar")
+        df_func = explodir_campo_multivalorado(df, "funcionalidades")
+        if not df_func.empty:
+            col_f1, col_f2 = st.columns([3, 2])
+            with col_f1:
+                df_func_plot = df_func.sort_values("mencoes", ascending=True)
+                fig_func = px.bar(
+                    df_func_plot,
+                    x="mencoes",
+                    y="item",
+                    orientation="h",
+                    title="Ranking de Funcionalidades e Módulos de ERP Mais Discutidos",
+                    labels={
+                        "mencoes": "Total de Menções",
+                        "item": "Módulo / Funcionalidade",
+                    },
+                    text_auto=True,
+                    color_discrete_sequence=["#0284C7"],
+                )
+                fig_func.update_layout(height=420)
+                st.plotly_chart(fig_func, use_container_width=True)
+
+            with col_f2:
+                st.markdown("##### Detalhamento de Demanda por Funcionalidade")
+                st.dataframe(
+                    df_func.rename(
+                        columns={
+                            "item": "Funcionalidade / Módulo",
+                            "mencoes": "Menções",
+                            "percentual_registros": "% dos Registros",
+                            "positivos": "Positivos",
+                            "negativos": "Negativos",
+                            "neutros": "Neutros",
+                        }
+                    ),
+                    use_container_width=True,
+                    height=380,
+                    hide_index=True,
+                )
+
+        st.divider()
+        st.subheader("3. Recomendações Estratégicas e Roadmap para a Integra Engenharia de Sistemas")
+        st.caption(
+            "Matriz gerada automaticamente a partir das funcionalidades mais discutidas e das dores "
+            "identificadas na amostra multiplataforma."
+        )
+        df_recomendacoes = gerar_plano_recomendacoes(df)
+        if not df_recomendacoes.empty:
+            st.dataframe(
+                df_recomendacoes,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        st.divider()
+        st.subheader("4. Comparativo entre Plataformas e Evolução Temporal")
         col_m3, col_m4 = st.columns(2)
 
         with col_m3:
@@ -374,27 +476,27 @@ def renderizar_dashboard() -> None:
 
         with col_m4:
             df_temp = df.copy()
-            df_temp["data_dia"] = (
+            df_temp["data_mes"] = (
                 pd.to_datetime(df_temp["data_publicacao"], utc=True, errors="coerce")
-                .dt.strftime("%Y-%m-%d")
+                .dt.strftime("%Y-%m")
             )
-            df_temp_valid = df_temp.dropna(subset=["data_dia"])
+            df_temp_valid = df_temp.dropna(subset=["data_mes"])
             if not df_temp_valid.empty:
                 df_serie = (
-                    df_temp_valid.groupby(["data_dia", "plataforma"], as_index=False)
+                    df_temp_valid.groupby(["data_mes", "plataforma"], as_index=False)
                     .size()
                     .rename(columns={"size": "quantidade"})
-                    .sort_values("data_dia")
+                    .sort_values("data_mes")
                 )
                 fig_temp = px.line(
                     df_serie,
-                    x="data_dia",
+                    x="data_mes",
                     y="quantidade",
                     color="plataforma",
                     markers=True,
-                    title="Evolução Temporal dos Registros por Plataforma",
+                    title="Evolução Temporal dos Registros por Plataforma (Mês/Ano)",
                     labels={
-                        "data_dia": "Data da Publicação",
+                        "data_mes": "Período (Ano-Mês)",
                         "quantidade": "Volume de Registros",
                         "plataforma": "Plataforma",
                     },
@@ -422,6 +524,7 @@ def renderizar_dashboard() -> None:
                     soma_likes = df_p["curtidas"].dropna().sum()
                     soma_coms = df_p["comentarios"].dropna().sum()
                     soma_views = df_p["visualizacoes"].dropna().sum()
+                    st.write(f"- **Total de registros:** {len(df_p):,}".replace(",", "."))
                     st.write(f"- **{label_like}:** {int(soma_likes):,}".replace(",", "."))
                     st.write(f"- **Comentários reportados:** {int(soma_coms):,}".replace(",", "."))
                     if not df_p["visualizacoes"].dropna().empty:
@@ -430,10 +533,10 @@ def renderizar_dashboard() -> None:
                         st.write("- **Visualizações:** *Não aplicável / Não disponível*")
 
     # =========================================================================
-    # ABA 3 — DETALHAMENTO
+    # ABA 3 — DETALHAMENTO E CONSULTAS HIVEQL
     # =========================================================================
     with aba3:
-        st.subheader("Registros Individuais Normalizados e Classificados")
+        st.subheader("Registros Individuais Normalizados, Classificados e Enriquecidos")
         colunas_exibicao = [
             "plataforma",
             "tipo_registro",
@@ -441,6 +544,8 @@ def renderizar_dashboard() -> None:
             "palavra_chave",
             "assunto",
             "temas_adicionais",
+            "funcionalidades",
+            "dores_relatadas",
             "sentimento",
             "texto",
             "curtidas",
@@ -453,7 +558,7 @@ def renderizar_dashboard() -> None:
         st.dataframe(
             df[colunas_presentes],
             use_container_width=True,
-            height=480,
+            height=460,
             hide_index=True,
         )
 
@@ -465,7 +570,25 @@ def renderizar_dashboard() -> None:
             mime="text/csv",
         )
 
-        with st.expander("🔍 Inspecionar Consultas Analíticas HiveQL (`hive/consultas.hql`)"):
+        st.divider()
+        st.subheader("🐝 Resultados Executados das Consultas Analíticas HiveQL (`Apache Hive`)")
+        arquivos_hive = sorted(HIVE_RESULTS_DIR.glob("consulta_*.csv")) if HIVE_RESULTS_DIR.exists() else []
+        if arquivos_hive:
+            opcoes_hive = {arq.stem: arq for arq in arquivos_hive}
+            consulta_escolhida = st.selectbox(
+                "Selecione a Consulta HiveQL para visualizar o resultado:",
+                options=list(opcoes_hive.keys()),
+            )
+            if consulta_escolhida:
+                df_hive_res = pd.read_csv(opcoes_hive[consulta_escolhida], encoding="utf-8-sig")
+                st.dataframe(df_hive_res, use_container_width=True, hide_index=True)
+        else:
+            st.info(
+                "Execute `python main.py --hive` ou clique em 'Atualizar Tratamento, HDFS e Hive' "
+                "na barra lateral para gerar as tabelas de resultado do HiveQL."
+            )
+
+        with st.expander("🔍 Inspecionar Código-Fonte HiveQL (`hive/consultas.hql`)"):
             caminho_hql = HIVE_DIR / "consultas.hql"
             if caminho_hql.exists():
                 st.code(caminho_hql.read_text(encoding="utf-8"), language="sql")

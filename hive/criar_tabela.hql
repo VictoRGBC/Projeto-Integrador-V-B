@@ -28,6 +28,8 @@ CREATE EXTERNAL TABLE IF NOT EXISTS inteligencia_mercado_social (
     sentimento          STRING COMMENT 'Classificacao heuristica exploratoria (Positivo, Negativo, Neutro)',
     assunto             STRING COMMENT 'Categoria tematica principal identificada',
     temas_adicionais    STRING COMMENT 'Categorias tematicas secundarias identificadas',
+    funcionalidades     STRING COMMENT 'Modulos e funcionalidades de ERP demandados ou mencionados',
+    dores_relatadas     STRING COMMENT 'Dores, gargalos e dificuldades operacionais identificadas',
     id_execucao         STRING COMMENT 'Identificador da execucao (runId) no Apify',
     actor_id            STRING COMMENT 'Identificador do Actor utilizado no Apify',
     origem_dado         STRING COMMENT 'Rastreabilidade da fonte de coleta',

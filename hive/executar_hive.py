@@ -42,6 +42,8 @@ NOMES_CONSULTAS = [
     "consulta_08_problemas_suporte",
     "consulta_09_problemas_implantacao",
     "consulta_10_top_curtidas_ou_votos",
+    "consulta_11_funcionalidades_demandadas",
+    "consulta_12_dores_operacionais_mercado",
 ]
 
 

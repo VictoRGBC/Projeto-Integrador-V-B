@@ -222,6 +222,13 @@ class ApifyIntegrationClient:
             status = run_data.get("status", "UNKNOWN")
 
             if status in self.TERMINAL_STATUSES:
+                if status == "TIMED-OUT" and run_data.get("defaultDatasetId"):
+                    logger.warning(
+                        "Execução '%s' atingiu TIMED-OUT no Apify, mas o dataset parcial '%s' será recuperado.",
+                        run_id,
+                        run_data.get("defaultDatasetId"),
+                    )
+                    return run_data
                 if status != "SUCCEEDED":
                     raise ApifyClientError(
                         f"Execução '{run_id}' finalizou com status malsucedido: {status}"

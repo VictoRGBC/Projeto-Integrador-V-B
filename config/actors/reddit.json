@@ -1,22 +1,14 @@
 {
   "_meta": {
     "platform": "Reddit",
-    "recommended_actor_id": "trudax/reddit-scraper-lite",
-    "alternative_actor_id": "automation-lab/reddit-scraper",
-    "pricing_note": "Compatível com o Free Tier do Apify ($5/mês de créditos gratuitos). Extrai publicações e comentários aninhados em uma única execução por meio de 'searches'.",
-    "required_fields": ["searches", "maxItems"]
+    "recommended_actor_id": "automation-lab/reddit-scraper",
+    "alternative_actor_id": "trudax/reddit-scraper-lite",
+    "pricing_note": "Compatível com o Free Tier do Apify ($5/mês de créditos gratuitos). Não exige sessionToken nem cookies pessoais.",
+    "required_fields": ["searchQuery", "maxPostsPerSource"]
   },
   "input_template": {
-    "searches": [],
-    "sort": "new",
-    "time": "all",
-    "maxItems": 20,
-    "maxPostCount": 15,
-    "maxComments": 10,
-    "skipComments": false,
-    "searchPosts": true,
-    "searchComments": false,
-    "searchCommunities": false,
-    "searchUsers": false
+    "searchQuery": "",
+    "maxPostsPerSource": 15,
+    "maxCommentsPerPost": 10
   }
 }

@@ -1,22 +1,21 @@
 {
   "_meta": {
     "platform": "Instagram",
-    "recommended_actor_id": "apify/instagram-scraper",
-    "alternative_actor_id": "apify/instagram-hashtag-scraper",
-    "pricing_note": "Compatível com o Free Tier do Apify ($5/mês de créditos gratuitos). Permite busca por termo/hashtag e extração de publicações ou comentários públicos.",
-    "required_fields": ["search", "searchType", "resultsType", "resultsLimit"]
+    "recommended_actor_id": "apify/instagram-hashtag-scraper",
+    "alternative_actor_id": "apify/instagram-scraper",
+    "pricing_note": "Compatível com o Free Tier do Apify ($5/mês de créditos gratuitos). Extrai publicações por hashtags/termos de negócio e inclui comentários recentes (latestComments).",
+    "required_fields": ["hashtags", "resultsType", "resultsLimit"]
   },
   "input_template": {
+    "hashtags": [],
+    "resultsType": "posts",
+    "resultsLimit": 15
+  },
+  "legacy_scraper_template": {
     "search": "",
     "searchType": "hashtag",
     "searchLimit": 5,
     "resultsType": "posts",
-    "resultsLimit": 20,
-    "addParentData": false
-  },
-  "comments_input_template": {
-    "directUrls": [],
-    "resultsType": "comments",
-    "resultsLimit": 10
+    "resultsLimit": 15
   }
 }

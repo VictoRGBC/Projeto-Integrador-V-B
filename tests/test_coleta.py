@@ -37,15 +37,22 @@ def test_platform_specific_inputs():
     assert yt_in["searchQueries"] == ["Sistema ERP"]
     assert yt_in["maxResults"] == 15
 
-    ig_in = build_instagram_input("Sistema ERP", max_items=12)
-    assert ig_in["search"] == "sistemaerp"
+    ig_in = build_instagram_input(
+        "Sistema ERP", max_items=12, actor_id="apify/instagram-hashtag-scraper"
+    )
+    assert "sistemaerp" in ig_in["hashtags"]
     assert ig_in["resultsLimit"] == 12
     assert ig_in["resultsType"] == "posts"
 
-    rd_in = build_reddit_input("Implantação de ERP", max_items=25, max_comments=8)
-    assert rd_in["searches"] == ["Implantação de ERP"]
-    assert rd_in["maxItems"] == 25
-    assert rd_in["maxComments"] == 8
+    rd_in = build_reddit_input(
+        "Implantação de ERP",
+        max_items=25,
+        max_comments=8,
+        actor_id="automation-lab/reddit-scraper",
+    )
+    assert rd_in["searchQuery"] == "Implantação de ERP"
+    assert rd_in["maxPostsPerSource"] == 25
+    assert rd_in["maxCommentsPerPost"] == 8
 
 
 def test_validate_input_parameters_raises_on_missing():

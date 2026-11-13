@@ -55,10 +55,10 @@ APIFY_YOUTUBE_COMMENTS_ACTOR_ID: str = os.getenv(
     "APIFY_YOUTUBE_COMMENTS_ACTOR_ID", "streamers/youtube-comments-scraper"
 ).strip()
 APIFY_INSTAGRAM_ACTOR_ID: str = os.getenv(
-    "APIFY_INSTAGRAM_ACTOR_ID", "apify/instagram-scraper"
+    "APIFY_INSTAGRAM_ACTOR_ID", "apify/instagram-hashtag-scraper"
 ).strip()
 APIFY_REDDIT_ACTOR_ID: str = os.getenv(
-    "APIFY_REDDIT_ACTOR_ID", "trudax/reddit-scraper-lite"
+    "APIFY_REDDIT_ACTOR_ID", "automation-lab/reddit-scraper"
 ).strip()
 
 # Limites de itens por execução

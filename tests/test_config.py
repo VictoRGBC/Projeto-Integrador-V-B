@@ -43,8 +43,8 @@ def test_actor_configs_differ_and_have_templates():
     rd_cfg = load_actor_config("reddit")
 
     assert "searchQueries" in yt_cfg["input_template"]
-    assert "search" in ig_cfg["input_template"]
-    assert "searches" in rd_cfg["input_template"]
+    assert "hashtags" in ig_cfg["input_template"]
+    assert "searchQuery" in rd_cfg["input_template"]
 
     # Verifica que os templates não são idênticos
     assert set(yt_cfg["input_template"].keys()) != set(ig_cfg["input_template"].keys())

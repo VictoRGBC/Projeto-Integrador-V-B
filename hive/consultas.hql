@@ -1,6 +1,6 @@
 -- =============================================================================
 -- PROJETO INTEGRADOR V - B | INTEGRA ENGENHARIA DE SISTEMAS
--- Consultas Analíticas em HiveQL (5 Obrigatórias + 5 Adicionais)
+-- Consultas Analíticas em HiveQL (5 Obrigatórias + 7 Adicionais de Mercado)
 -- =============================================================================
 
 USE integra_mercado;
@@ -160,3 +160,35 @@ FROM inteligencia_mercado_social
 WHERE NULLIF(TRIM(CAST(curtidas AS STRING)), '') IS NOT NULL
 ORDER BY plataforma ASC, curtidas_ou_votos DESC
 LIMIT 30;
+
+-- -----------------------------------------------------------------------------
+-- CONSULTA 11 (ADICIONAL) — Funcionalidades e módulos mais demandados no mercado
+-- Objetivo: Identificar os módulos e funcionalidades de ERP mais citados para
+-- orientar o roadmap de produto da Integra Engenharia de Sistemas.
+-- -----------------------------------------------------------------------------
+SELECT
+    funcionalidades,
+    COUNT(*) AS total_registros,
+    SUM(CASE WHEN sentimento = 'Positivo' THEN 1 ELSE 0 END) AS positivos,
+    SUM(CASE WHEN sentimento = 'Negativo' THEN 1 ELSE 0 END) AS negativos
+FROM inteligencia_mercado_social
+WHERE funcionalidades IS NOT NULL AND funcionalidades <> ''
+GROUP BY funcionalidades
+ORDER BY total_registros DESC
+LIMIT 20;
+
+-- -----------------------------------------------------------------------------
+-- CONSULTA 12 (ADICIONAL) — Principais dores e dificuldades operacionais relatadas
+-- Objetivo: Mapear os gargalos mais frequentes dos usuários de sistemas empresariais.
+-- -----------------------------------------------------------------------------
+SELECT
+    dores_relatadas,
+    COUNT(*) AS total_registros,
+    SUM(CASE WHEN sentimento = 'Negativo' THEN 1 ELSE 0 END) AS relatos_negativos
+FROM inteligencia_mercado_social
+WHERE dores_relatadas IS NOT NULL
+  AND dores_relatadas <> ''
+  AND dores_relatadas <> 'Sem dor específica relatada'
+GROUP BY dores_relatadas
+ORDER BY total_registros DESC
+LIMIT 20;

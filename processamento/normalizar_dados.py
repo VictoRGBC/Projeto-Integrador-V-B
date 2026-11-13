@@ -1,6 +1,8 @@
 """
 Módulo de normalização de dados heterogêneos das três plataformas (YouTube, Instagram e Reddit)
 para o modelo relacional/analítico unificado (Seção 4).
+Inclui extração de comentários aninhados (Instagram/Reddit), filtragem de ruído semântico
+e enriquecimento analítico de funcionalidades demandadas e dores de mercado.
 """
 
 from datetime import datetime, timezone
@@ -9,9 +11,14 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import pandas as pd
 
-from processamento.classificar_dados import classificar_sentimento, identificar_temas
+from processamento.classificar_dados import (
+    classificar_sentimento,
+    identificar_dores_mercado,
+    identificar_funcionalidades,
+    identificar_temas,
+)
 
-# Ordem oficial das colunas do modelo unificado + rastreabilidade técnica
+# Ordem oficial das colunas do modelo unificado + enriquecimento analítico + rastreabilidade
 COLUNAS_MODELO_UNIFICADO: List[str] = [
     "plataforma",
     "tipo_registro",
@@ -29,6 +36,8 @@ COLUNAS_MODELO_UNIFICADO: List[str] = [
     "sentimento",
     "assunto",
     "temas_adicionais",
+    "funcionalidades",
+    "dores_relatadas",
     "id_execucao",
     "actor_id",
     "origem_dado",
@@ -41,6 +50,42 @@ COLUNAS_METRICAS_INTEIRAS: List[str] = [
     "compartilhamentos",
     "visualizacoes",
 ]
+
+# Subreddits médicos/psicológicos onde a sigla "ERP" significa "Exposure and Response Prevention"
+# (terapia para TOC/OCD) ou Roleplay, não tendo relação com sistemas de gestão empresarial.
+SUBREDDITS_FORA_DE_ESCOPO = {
+    "ocd",
+    "rocd",
+    "pureo",
+    "erptherapy",
+    "anxiety",
+    "mentalhealth",
+    "therapists",
+    "vrchat",
+    "ffxiv",
+    "secondlife",
+    "sexualidade",
+    "relacionamentos",
+    "desabafos",
+    "perguntas",
+}
+
+TERMOS_FORA_DE_ESCOPO_ERP = (
+    "exposure and response prevention",
+    "exposure & response prevention",
+    "exposure therapy",
+    "relationship ocd",
+    "mental compulsions",
+    "intrusive thoughts",
+    "engravidar",
+    "disfuncao eretil",
+    "disfunção erétil",
+    "penetracao",
+    "penetração",
+    "sexualite",
+    "sexualité",
+    "erotic roleplay",
+)
 
 
 def padronizar_nome_plataforma(plataforma: str) -> str:
@@ -68,7 +113,6 @@ def converter_data_iso8601(valor: Any) -> Optional[str]:
 
     try:
         if isinstance(valor, (int, float)):
-            # Se for timestamp em milissegundos, converte para segundos
             ts = float(valor)
             if ts > 1e11:
                 ts = ts / 1000.0
@@ -79,7 +123,6 @@ def converter_data_iso8601(valor: Any) -> Optional[str]:
         if not texto_data:
             return None
 
-        # Caso seja string numérica de timestamp
         if texto_data.isdigit():
             ts = float(texto_data)
             if ts > 1e11:
@@ -131,13 +174,11 @@ def padronizar_texto(texto: Any) -> Optional[str]:
     if not bruto:
         return None
 
-    # Pseudonimização de e-mails e handles pessoais em conformidade com a Seção 11 (LGPD)
     sem_email = re.sub(
         r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", "[EMAIL_OMITIDO]", bruto
     )
     sem_handle = re.sub(r"(?<!\w)@[a-zA-Z0-9_.-]{2,30}", "@[USUARIO]", sem_email)
 
-    # Remove quebras de linha e tabulações para não quebrar linhas no HDFS / Hive CSV
     sem_quebras = re.sub(r"[\r\n\t]+", " ", sem_handle)
     normalizado = re.sub(r"\s{2,}", " ", sem_quebras).strip()
     return normalizado if normalizado else None
@@ -180,14 +221,21 @@ def _extrair_meta(
 
 
 def _finalizar_registro(campos: Dict[str, Any]) -> Dict[str, Any]:
-    """Aplica classificação de sentimento e assunto e garante todas as colunas do modelo."""
+    """
+    Aplica classificação de sentimento, assunto principal, temas adicionais,
+    funcionalidades demandadas e dores de mercado, garantindo todas as colunas do modelo.
+    """
     texto = campos.get("texto") or ""
     sentimento = classificar_sentimento(texto)
     assunto_principal, temas_adicionais = identificar_temas(texto)
+    funcionalidades = identificar_funcionalidades(texto)
+    dores_relatadas = identificar_dores_mercado(texto)
 
     campos["sentimento"] = sentimento
     campos["assunto"] = assunto_principal
     campos["temas_adicionais"] = temas_adicionais
+    campos["funcionalidades"] = funcionalidades
+    campos["dores_relatadas"] = dores_relatadas
     campos["status_tratamento"] = "CLASSIFICADO" if texto else "SEM_TEXTO"
 
     registro_completo: Dict[str, Any] = {}
@@ -213,7 +261,6 @@ def normalizar_youtube(
         data_coleta=data_coleta,
     )
 
-    # Identifica se o registro é um comentário ou um vídeo (publicação)
     is_comment = bool(
         registro.get("cid")
         or registro.get("commentId")
@@ -241,7 +288,7 @@ def normalizar_youtube(
             else registro.get("likes")
         )
         comentarios = converter_metrica_inteira(registro.get("replyCount"))
-        visualizacoes = None  # Comentários do YouTube não possuem contagem de visualizações
+        visualizacoes = None
     else:
         id_registro = str(
             registro.get("id")
@@ -251,7 +298,11 @@ def normalizar_youtube(
         id_publicacao = id_registro
         titulo = str(registro.get("title") or "").strip()
         descricao = str(registro.get("description") or registro.get("text") or "").strip()
-        texto_bruto = f"{titulo}. {descricao}".strip(". ") if titulo and descricao else (titulo or descricao)
+        texto_bruto = (
+            f"{titulo}. {descricao}".strip(". ")
+            if titulo and descricao
+            else (titulo or descricao)
+        )
         curtidas = converter_metrica_inteira(
             registro.get("likeCount")
             if registro.get("likeCount") is not None
@@ -268,7 +319,6 @@ def normalizar_youtube(
             else registro.get("views")
         )
 
-    # YouTube não disponibiliza contagem pública de compartilhamentos (não inventar métrica)
     compartilhamentos = converter_metrica_inteira(registro.get("shareCount"))
 
     data_pub = converter_data_iso8601(
@@ -304,12 +354,12 @@ def normalizar_instagram(
 ) -> Dict[str, Any]:
     """
     Adaptador de normalização para registros do Instagram (publicações ou comentários).
-    Suporta saída de apify/instagram-scraper e apify/instagram-hashtag-scraper.
+    Suporta saída de apify/instagram-hashtag-scraper e apify/instagram-scraper.
     """
     meta = _extrair_meta(
         registro,
         plataforma_padrao="Instagram",
-        actor_padrao="apify/instagram-scraper",
+        actor_padrao="apify/instagram-hashtag-scraper",
         palavra_chave=palavra_chave,
         data_coleta=data_coleta,
     )
@@ -344,6 +394,9 @@ def normalizar_instagram(
             or id_registro
         ).strip()
         texto_bruto = registro.get("caption") or registro.get("text") or ""
+        if not texto_bruto and registro.get("hashtags"):
+            tags = " ".join(f"#{t}" for t in registro.get("hashtags", []) if t)
+            texto_bruto = f"Publicação Instagram {tags}".strip()
         curtidas = converter_metrica_inteira(registro.get("likesCount"))
         comentarios = converter_metrica_inteira(registro.get("commentsCount"))
         visualizacoes = converter_metrica_inteira(
@@ -385,17 +438,19 @@ def normalizar_reddit(
 ) -> Dict[str, Any]:
     """
     Adaptador de normalização para registros do Reddit (posts ou comentários).
-    Suporta saída de trudax/reddit-scraper-lite e automation-lab/reddit-scraper.
+    Suporta saída de automation-lab/reddit-scraper e trudax/reddit-scraper-lite.
     """
     meta = _extrair_meta(
         registro,
         plataforma_padrao="Reddit",
-        actor_padrao="trudax/reddit-scraper-lite",
+        actor_padrao="automation-lab/reddit-scraper",
         palavra_chave=palavra_chave,
         data_coleta=data_coleta,
     )
 
-    data_type = str(registro.get("dataType") or registro.get("kind") or "").lower()
+    data_type = str(
+        registro.get("dataType") or registro.get("type") or registro.get("kind") or ""
+    ).lower()
     is_comment = bool(
         data_type in ("comment", "t1")
         or (registro.get("parentId") and not registro.get("title"))
@@ -415,17 +470,40 @@ def normalizar_reddit(
             or registro.get("parentId")
             or id_registro
         ).strip()
-        texto_bruto = registro.get("body") or registro.get("text") or ""
-        comentarios = converter_metrica_inteira(registro.get("numberOfreplies"))
+        texto_bruto = (
+            registro.get("body")
+            or registro.get("text")
+            or registro.get("selfText")
+            or ""
+        )
+        comentarios = converter_metrica_inteira(
+            registro.get("numberOfreplies")
+            if registro.get("numberOfreplies") is not None
+            else registro.get("numReplies")
+        )
     else:
         id_publicacao = id_registro
         titulo = str(registro.get("title") or "").strip()
-        corpo = str(registro.get("body") or registro.get("text") or registro.get("selftext") or "").strip()
-        texto_bruto = f"{titulo}. {corpo}".strip(". ") if titulo and corpo else (titulo or corpo)
+        corpo = str(
+            registro.get("body")
+            or registro.get("selfText")
+            or registro.get("selftext")
+            or registro.get("text")
+            or ""
+        ).strip()
+        texto_bruto = (
+            f"{titulo}. {corpo}".strip(". ")
+            if titulo and corpo
+            else (titulo or corpo)
+        )
         comentarios = converter_metrica_inteira(
             registro.get("numberOfComments")
             if registro.get("numberOfComments") is not None
-            else registro.get("comment_count")
+            else (
+                registro.get("numComments")
+                if registro.get("numComments") is not None
+                else registro.get("comment_count")
+            )
         )
 
     curtidas = converter_metrica_inteira(
@@ -463,6 +541,31 @@ def normalizar_reddit(
     return _finalizar_registro(campos)
 
 
+def _eh_registro_fora_de_escopo(item: Dict[str, Any]) -> bool:
+    """
+    Filtra publicações originadas em comunidades ou tópicos fora do escopo de software
+    de gestão empresarial (ex: terapia 'Exposure and Response Prevention' para TOC/OCD,
+    tópicos médicos ou roleplay).
+    """
+    sub = str(
+        item.get("subreddit")
+        or item.get("communityName")
+        or item.get("parsedCommunityName")
+        or ""
+    ).strip().lower().lstrip("r/")
+    if sub in SUBREDDITS_FORA_DE_ESCOPO:
+        return True
+
+    texto_combinado = " ".join(
+        str(item.get(k) or "")
+        for k in ("title", "description", "text", "body", "selfText", "caption")
+    ).lower()
+    for termo in TERMOS_FORA_DE_ESCOPO_ERP:
+        if termo in texto_combinado:
+            return True
+    return False
+
+
 def normalizar_registros(
     registros_youtube: Optional[Iterable[Dict[str, Any]]] = None,
     registros_instagram: Optional[Iterable[Dict[str, Any]]] = None,
@@ -470,25 +573,66 @@ def normalizar_registros(
 ) -> pd.DataFrame:
     """
     Consolida os resultados das três plataformas em um único DataFrame padronizado,
-    aplicando tipagem correta de métricas inteiras nulas (Int64) e removendo duplicidades
-    com base em (plataforma, tipo_registro, id_registro).
+    extraindo também comentários públicos aninhados (como `latestComments` do Instagram
+    e `comments` do Reddit), aplicando tipagem correta de métricas inteiras nulas (Int64)
+    e removendo duplicidades com base em (plataforma, tipo_registro, id_registro).
     """
     linhas_normalizadas: List[Dict[str, Any]] = []
 
     if registros_youtube:
         for item in registros_youtube:
-            if isinstance(item, dict):
+            if isinstance(item, dict) and not _eh_registro_fora_de_escopo(item):
                 linhas_normalizadas.append(normalizar_youtube(item))
 
     if registros_instagram:
         for item in registros_instagram:
-            if isinstance(item, dict):
-                linhas_normalizadas.append(normalizar_instagram(item))
+            if not isinstance(item, dict) or _eh_registro_fora_de_escopo(item):
+                continue
+            linhas_normalizadas.append(normalizar_instagram(item))
+
+            # Extrai comentários públicos aninhados retornados em `latestComments`
+            latest_comments = item.get("latestComments")
+            if isinstance(latest_comments, list):
+                parent_code = item.get("shortCode") or item.get("id")
+                parent_url = item.get("url")
+                parent_meta = item.get("_coleta_meta")
+                for idx_c, comm in enumerate(latest_comments):
+                    if isinstance(comm, dict) and comm.get("text"):
+                        comm_enriquecido = {
+                            **comm,
+                            "type": "comment",
+                            "id": comm.get("id") or f"{parent_code}_c{idx_c + 1}",
+                            "postShortCode": parent_code,
+                            "postUrl": parent_url,
+                            "_coleta_meta": parent_meta,
+                        }
+                        linhas_normalizadas.append(normalizar_instagram(comm_enriquecido))
 
     if registros_reddit:
         for item in registros_reddit:
-            if isinstance(item, dict):
-                linhas_normalizadas.append(normalizar_reddit(item))
+            if not isinstance(item, dict):
+                continue
+            if _eh_registro_fora_de_escopo(item):
+                continue
+            linhas_normalizadas.append(normalizar_reddit(item))
+
+            # Extrai comentários públicos aninhados caso presentes na chave `comments`
+            nested_comments = item.get("comments")
+            if isinstance(nested_comments, list):
+                parent_id = item.get("id")
+                parent_url = item.get("url")
+                parent_meta = item.get("_coleta_meta")
+                for idx_c, comm in enumerate(nested_comments):
+                    if isinstance(comm, dict) and (comm.get("body") or comm.get("text")):
+                        comm_enriquecido = {
+                            **comm,
+                            "type": "comment",
+                            "id": comm.get("id") or f"{parent_id}_rc{idx_c + 1}",
+                            "parentId": parent_id,
+                            "url": comm.get("url") or parent_url,
+                            "_coleta_meta": parent_meta,
+                        }
+                        linhas_normalizadas.append(normalizar_reddit(comm_enriquecido))
 
     if not linhas_normalizadas:
         df_vazio = pd.DataFrame(columns=COLUNAS_MODELO_UNIFICADO)
@@ -498,15 +642,12 @@ def normalizar_registros(
 
     df = pd.DataFrame(linhas_normalizadas, columns=COLUNAS_MODELO_UNIFICADO)
 
-    # Remove registros sem identificador ou sem texto válido se id_registro for nulo
-    df = df.dropna(subset=["plataforma", "tipo_registro", "id_registro"]).copy()
+    df = df.dropna(subset=["plataforma", "tipo_registro", "id_registro", "texto"]).copy()
 
-    # Regra 4.2.7: Remover duplicidades utilizando plataforma, tipo_registro e id_registro
     df = df.drop_duplicates(
         subset=["plataforma", "tipo_registro", "id_registro"], keep="first"
     ).reset_index(drop=True)
 
-    # Regra 4.2.3 e 4.2.4: Garantir tipo inteiro anulável (Int64) sem substituir nulo por zero
     for col in COLUNAS_METRICAS_INTEIRAS:
         df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
 

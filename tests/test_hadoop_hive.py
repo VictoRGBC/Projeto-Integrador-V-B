@@ -58,10 +58,10 @@ def test_hive_ddl_script_exists_and_creates_external_table():
 
 
 def test_hive_consultas_execution_all_10_queries():
-    """Verifica se todas as 10 consultas SELECT de hive/consultas.hql executam com sucesso."""
+    """Verifica se todas as 12 consultas SELECT de hive/consultas.hql executam com sucesso."""
     statements = extrair_consultas_hql(HIVE_DIR / "consultas.hql")
     select_queries = [s for s in statements if s.upper().startswith("SELECT")]
-    assert len(select_queries) == 10
+    assert len(select_queries) == 12
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
@@ -69,7 +69,7 @@ def test_hive_consultas_execution_all_10_queries():
             registros_youtube=[
                 {
                     "id": "yt1",
-                    "title": "Implantação de ERP rápida e eficiente",
+                    "title": "Implantação de ERP rápida e eficiente com emissão de nota fiscal",
                     "likeCount": 50,
                     "viewCount": 500,
                     "uploadDate": "2026-05-01T10:00:00Z",
@@ -79,7 +79,7 @@ def test_hive_consultas_execution_all_10_queries():
             registros_reddit=[
                 {
                     "id": "rd1",
-                    "title": "Suporte com erro e lentidão no sistema",
+                    "title": "Suporte com erro e lentidão no sistema financeiro",
                     "upVotes": 20,
                     "createdAt": "2026-05-02T12:00:00Z",
                     "_coleta_meta": {"palavra_chave": "Suporte técnico de sistemas"},
@@ -92,6 +92,8 @@ def test_hive_consultas_execution_all_10_queries():
         out_hive = tmp_path / "hive_resultados"
         res = executar_fluxo_hive(caminho_csv_override=csv_temp, output_dir=out_hive)
         assert res["success"] is True
-        assert res["queries_executed"] == 10
+        assert res["queries_executed"] == 12
         assert (out_hive / "resumo_consultas_hive.json").exists()
         assert (out_hive / "consulta_01_distribuicao_plataforma.csv").exists()
+        assert (out_hive / "consulta_11_funcionalidades_demandadas.csv").exists()
+        assert (out_hive / "consulta_12_dores_operacionais_mercado.csv").exists()

@@ -21,6 +21,7 @@ from coleta.coletar_youtube import coletar_youtube
 from config.settings import get_logger, get_search_keywords, validate_environment
 from hadoop.scripts.enviar_hdfs import HdfsError, executar_fluxo_hdfs
 from hive.executar_hive import HiveExecutionError, executar_fluxo_hive
+from processamento.gerar_insights import gerar_sintese_executiva
 from processamento.tratar_dados import executar_tratamento_completo
 
 logger = get_logger("main")
@@ -41,10 +42,11 @@ def etapa_verificar_configuracoes(require_token: bool = False) -> Dict[str, Any]
     return status
 
 
-def etapa_coleta_multiplataforma() -> Dict[str, Any]:
+def etapa_coleta_multiplataforma(skip_existing: bool = True) -> Dict[str, Any]:
     """
     2-5. Executa a coleta no YouTube, Instagram e Reddit via Apify e salva os dados brutos.
     A falha em uma plataforma é registrada no log e não interrompe as demais.
+    Atualiza o dataset consolidado incrementalmente após cada plataforma.
     """
     status_cfg = etapa_verificar_configuracoes(require_token=True)
     if not status_cfg["valid"]:
@@ -56,13 +58,16 @@ def etapa_coleta_multiplataforma() -> Dict[str, Any]:
     logger.info("Iniciando coleta multiplataforma para %d palavras-chave...", len(keywords))
 
     logger.info("Etapa 2: Executando coleta no YouTube...")
-    res_yt = coletar_youtube(keywords=keywords)
+    res_yt = coletar_youtube(keywords=keywords, skip_existing=skip_existing)
+    executar_tratamento_completo()
 
     logger.info("Etapa 3: Executando coleta no Instagram...")
-    res_ig = coletar_instagram(keywords=keywords)
+    res_ig = coletar_instagram(keywords=keywords, skip_existing=skip_existing)
+    executar_tratamento_completo()
 
     logger.info("Etapa 4: Executando coleta no Reddit...")
-    res_rd = coletar_reddit(keywords=keywords)
+    res_rd = coletar_reddit(keywords=keywords, skip_existing=skip_existing)
+    executar_tratamento_completo()
 
     total_geral = (
         res_yt.get("total_items", 0)
@@ -87,12 +92,19 @@ def etapa_coleta_multiplataforma() -> Dict[str, Any]:
 
 def etapa_tratamento() -> int:
     """
-    6-9. Normaliza os resultados, classifica sentimentos e assuntos, consolida os registros
-    e salva o CSV tratado em dados/tratados/dados_multiplataforma.csv.
+    6-9. Normaliza os resultados, classifica sentimentos, assuntos, funcionalidades e dores,
+    consolida os registros e salva o CSV tratado em dados/tratados/dados_multiplataforma.csv.
     """
     logger.info("Etapas 6 a 9: Normalizando, classificando e consolidando registros...")
     df = executar_tratamento_completo()
-    logger.info("Total de registros consolidados no CSV tratado: %d", len(df))
+    sintese = gerar_sintese_executiva(df)
+    logger.info(
+        "Síntese Executiva -> Total: %d | Assunto Líder: %s | Funcionalidade Líder: %s | Principal Dor: %s",
+        len(df),
+        sintese["assunto_lider"],
+        sintese["funcionalidade_lider"],
+        sintese["dor_lider"],
+    )
     return len(df)
 
 
@@ -113,19 +125,21 @@ def etapa_hive() -> Dict[str, Any]:
     """
     11. Disponibiliza os dados na tabela externa do Apache Hive e executa as consultas HiveQL.
     """
-    logger.info("Etapa 11: Criando tabela externa e executando consultas analíticas no Apache Hive...")
+    logger.info(
+        "Etapa 11: Criando tabela externa e executando as 12 consultas analíticas no Apache Hive..."
+    )
     res = executar_fluxo_hive()
     logger.info("Consultas HiveQL concluídas. Resultados salvos em: %s", res.get("results_file"))
     return res
 
 
-def executar_pipeline_completo() -> int:
+def executar_pipeline_completo(skip_existing: bool = True) -> int:
     """
     Executa o fluxo completo na ordem definida na Seção 9 (Etapas 1 a 11).
     """
     logger.info("=== INICIANDO PIPELINE COMPLETO DE INTELIGÊNCIA DE MERCADO ===")
     try:
-        etapa_coleta_multiplataforma()
+        etapa_coleta_multiplataforma(skip_existing=skip_existing)
     except Exception as err:
         logger.error("Erro na etapa de coleta: %s", err)
         return 1
@@ -164,6 +178,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Executa a coleta de dados públicos no YouTube, Instagram e Reddit via Apify.",
     )
     parser.add_argument(
+        "--forcar-coleta",
+        action="store_true",
+        help="Força nova coleta no Apify mesmo para palavras-chave que já possuem arquivo bruto salvo.",
+    )
+    parser.add_argument(
         "--tratamento",
         action="store_true",
         help="Executa normalização, classificação heurística e consolidação do CSV tratado.",
@@ -194,8 +213,10 @@ def main() -> int:
         parser.print_help()
         return 0
 
+    skip_existing = not args.forcar_coleta
+
     if args.pipeline:
-        return executar_pipeline_completo()
+        return executar_pipeline_completo(skip_existing=skip_existing)
 
     exit_code = 0
 
@@ -207,7 +228,7 @@ def main() -> int:
 
     if args.coleta:
         try:
-            etapa_coleta_multiplataforma()
+            etapa_coleta_multiplataforma(skip_existing=skip_existing)
         except Exception as err:
             logger.error("Falha na coleta: %s", err)
             exit_code = 1
