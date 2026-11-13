@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "platform": "YouTube",
+    "recommended_actor_id": "streamers/youtube-scraper",
+    "alternative_actor_id": "automation-lab/youtube-scraper",
+    "comments_actor_id": "streamers/youtube-comments-scraper",
+    "pricing_note": "Compatível com o Free Tier do Apify ($5/mês de créditos gratuitos). Consome créditos proporcionalmente a maxResults e maxComments.",
+    "required_fields": ["searchQueries", "maxResults"]
+  },
+  "input_template": {
+    "searchQueries": [],
+    "maxResults": 20,
+    "maxResultsShorts": 0,
+    "maxResultStreams": 0,
+    "searchType": "video",
+    "sortBy": "relevance",
+    "uploadDate": "any",
+    "includeSubtitles": false
+  },
+  "comments_input_template": {
+    "startUrls": [],
+    "maxComments": 10,
+    "sortCommentsBy": "TOP_COMMENTS"
+  }
+}

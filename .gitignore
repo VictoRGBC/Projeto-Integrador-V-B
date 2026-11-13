@@ -1,0 +1,38 @@
+# Variáveis de ambiente e credenciais
+.env
+.env.local
+.env.*.local
+
+# Ambientes virtuais Python
+venv/
+.venv/
+env/
+ENV/
+
+# Cache e artefatos Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs privados
+logs/*.log
+logs/*.txt
+!logs/.gitkeep
+
+# Dados coletados, tratados e repositório HDFS local (LGPD - não versionar datasets)
+dados/brutos/
+dados/tratados/
+hadoop/hdfs_storage/
+!dados/brutos/youtube/.gitkeep
+!dados/brutos/instagram/.gitkeep
+!dados/brutos/reddit/.gitkeep
+!dados/tratados/.gitkeep
+
+# IDE e Sistema Operacional
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
