@@ -15,6 +15,7 @@ from config.settings import (
     HDFS_LOCAL_ROOT,
     PROCESSED_DATA_DIR,
     RAW_INSTAGRAM_DIR,
+    RAW_LINKEDIN_DIR,
     RAW_REDDIT_DIR,
     RAW_YOUTUBE_DIR,
     get_logger,
@@ -26,6 +27,7 @@ HDFS_DIRECTORIES: List[str] = [
     f"{HDFS_BASE_DIR}/dados_brutos/youtube",
     f"{HDFS_BASE_DIR}/dados_brutos/instagram",
     f"{HDFS_BASE_DIR}/dados_brutos/reddit",
+    f"{HDFS_BASE_DIR}/dados_brutos/linkedin",
     f"{HDFS_BASE_DIR}/dados_tratados/multiplataforma",
 ]
 
@@ -202,6 +204,7 @@ def executar_fluxo_hdfs(root_dir: Path = HDFS_LOCAL_ROOT) -> Dict[str, Any]:
         RAW_YOUTUBE_DIR: f"{HDFS_BASE_DIR}/dados_brutos/youtube/",
         RAW_INSTAGRAM_DIR: f"{HDFS_BASE_DIR}/dados_brutos/instagram/",
         RAW_REDDIT_DIR: f"{HDFS_BASE_DIR}/dados_brutos/reddit/",
+        RAW_LINKEDIN_DIR: f"{HDFS_BASE_DIR}/dados_brutos/linkedin/",
     }
     for pasta_local, pasta_hdfs in mapa_brutos.items():
         if pasta_local.exists():

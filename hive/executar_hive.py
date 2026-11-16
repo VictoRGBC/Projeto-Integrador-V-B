@@ -157,6 +157,50 @@ def executar_fluxo_hive(
     with sqlite3.connect(":memory:") as conn:
         df_dados.to_sql("inteligencia_mercado_social", conn, index=False, if_exists="replace")
 
+        # Cria visões/tabelas normalizadas explodidas para as Consultas 11 e 12 (equivalente ao LATERAL VIEW explode do Hive)
+        funcs_rows: List[Dict[str, Any]] = []
+        dores_rows: List[Dict[str, Any]] = []
+        for _, r in df_dados.iterrows():
+            sent = str(r.get("sentimento") or "Neutro")
+            plat = str(r.get("plataforma") or "")
+            for f_item in str(r.get("funcionalidades") or "").split(";"):
+                f_clean = f_item.strip()
+                if f_clean and f_clean != "Geral / Institucional":
+                    funcs_rows.append(
+                        {
+                            "plataforma": plat,
+                            "sentimento": sent,
+                            "funcionalidade_individual": f_clean,
+                        }
+                    )
+            for d_item in str(r.get("dores_relatadas") or "").split(";"):
+                d_clean = d_item.strip()
+                if d_clean and d_clean != "Sem dor específica relatada":
+                    dores_rows.append(
+                        {
+                            "plataforma": plat,
+                            "sentimento": sent,
+                            "dor_individual": d_clean,
+                        }
+                    )
+
+        df_funcs_exp = (
+            pd.DataFrame(funcs_rows)
+            if funcs_rows
+            else pd.DataFrame(columns=["plataforma", "sentimento", "funcionalidade_individual"])
+        )
+        df_dores_exp = (
+            pd.DataFrame(dores_rows)
+            if dores_rows
+            else pd.DataFrame(columns=["plataforma", "sentimento", "dor_individual"])
+        )
+        df_funcs_exp.to_sql(
+            "inteligencia_funcionalidades_explodidas", conn, index=False, if_exists="replace"
+        )
+        df_dores_exp.to_sql(
+            "inteligencia_dores_explodidas", conn, index=False, if_exists="replace"
+        )
+
         for idx, query_hql in enumerate(consultas_select):
             nome_consulta = (
                 NOMES_CONSULTAS[idx]

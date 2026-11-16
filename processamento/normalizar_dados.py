@@ -68,6 +68,11 @@ SUBREDDITS_FORA_DE_ESCOPO = {
     "relacionamentos",
     "desabafos",
     "perguntas",
+    "uruguay",
+    "sweden",
+    "autonomoses",
+    "literaciafinanceira",
+    "iitkgp",
 }
 
 TERMOS_FORA_DE_ESCOPO_ERP = (
@@ -85,11 +90,43 @@ TERMOS_FORA_DE_ESCOPO_ERP = (
     "sexualite",
     "sexualité",
     "erotic roleplay",
+    "sergei strelec",
+    "hiren's bootcd",
+    "apostila ufc",
+    "ruidos estranhos e aquecimento",
+    "ruídos estranhos e aquecimento",
+    "suporte cas informatica",
+    "suporte cas informática",
+    "atendimento em vargem grande",
+    "deu pane? liga pra fj",
+    "outlook fora do ar",
+    "o outlook caiu",
+    "qurilish obyektlarida",
+    "banco do brasil anunciou lucro",
+    "anthropic, empresa de tecnologia",
+    "dividendos acima de r$ 50 mil",
+    "calendario trabalhista do ano",
+    "calendário trabalhista do ano",
+    "trocar de endereco parece simples",
+    "trocar de endereço parece simples",
+    "primer laburo como ingeniero",
+    "me quiero pasar a sistemas",
+    "que sistema operativo usas",
+    "qué sistema operativo usas",
+    "print-on-demand",
+    "lidar com a ansiedade neste mercado",
+    "i got deported and want 180 my life",
+    "quit my 9-5 tech sales job",
+    "early revenue, no product yet",
+    "where are y’all finding software development clients",
+    "where are y'all finding software development clients",
+    "madali pa ba makahanap",
+    "tell your org we're cooked",
 )
 
 
 def padronizar_nome_plataforma(plataforma: str) -> str:
-    """Padroniza o nome da plataforma para 'YouTube', 'Instagram' ou 'Reddit'."""
+    """Padroniza o nome da plataforma para 'YouTube', 'Instagram', 'Reddit' ou 'LinkedIn'."""
     if not plataforma:
         return "Desconhecida"
     chave = str(plataforma).strip().lower()
@@ -99,6 +136,8 @@ def padronizar_nome_plataforma(plataforma: str) -> str:
         "instagram": "Instagram",
         "ig": "Instagram",
         "reddit": "Reddit",
+        "linkedin": "LinkedIn",
+        "li": "LinkedIn",
     }
     return mapa.get(chave, str(plataforma).strip())
 
@@ -232,6 +271,12 @@ def _finalizar_registro(campos: Dict[str, Any]) -> Dict[str, Any]:
     dores_relatadas = identificar_dores_mercado(texto)
 
     campos["sentimento"] = sentimento
+    if (
+        assunto_principal == "Outros"
+        and campos.get("tipo_registro") == "comentario"
+        and "erp" in str(campos.get("palavra_chave") or "").lower()
+    ):
+        assunto_principal = "Funcionalidades"
     campos["assunto"] = assunto_principal
     campos["temas_adicionais"] = temas_adicionais
     campos["funcionalidades"] = funcionalidades
@@ -541,6 +586,190 @@ def normalizar_reddit(
     return _finalizar_registro(campos)
 
 
+def normalizar_linkedin(
+    registro: Dict[str, Any],
+    palavra_chave: Optional[str] = None,
+    data_coleta: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Adaptador de normalização para registros do LinkedIn (publicações ou comentários corporativos B2B).
+    Suporta saída de apimaestro/linkedin-posts-search-scraper-no-cookies e harvestapi/linkedin-post-search.
+    """
+    meta = _extrair_meta(
+        registro,
+        plataforma_padrao="LinkedIn",
+        actor_padrao="apimaestro/linkedin-posts-search-scraper-no-cookies",
+        palavra_chave=palavra_chave or registro.get("matchedQuery"),
+        data_coleta=data_coleta,
+    )
+
+    data_type = str(registro.get("type") or "").lower()
+    is_comment = bool(data_type == "comment" or registro.get("commentId"))
+    tipo_registro = "comentario" if is_comment else "publicacao"
+
+    id_registro = str(
+        registro.get("id")
+        or registro.get("urn")
+        or registro.get("full_urn")
+        or registro.get("activity_id")
+        or registro.get("activity_urn")
+        or registro.get("postId")
+        or ""
+    ).strip()
+
+    id_publicacao = str(
+        registro.get("postId")
+        or registro.get("parentId")
+        or id_registro
+    ).strip()
+
+    content_field = registro.get("content")
+    article_title = ""
+    if isinstance(content_field, dict):
+        art = content_field.get("article")
+        if isinstance(art, dict) and art.get("title"):
+            article_title = str(art.get("title")).strip()
+        content_str = ""
+    else:
+        content_str = str(content_field or "").strip()
+
+    texto_principal = str(
+        registro.get("text")
+        or content_str
+        or registro.get("commentary")
+        or registro.get("postText")
+        or registro.get("title")
+        or ""
+    ).strip()
+
+    if article_title and article_title.lower() not in texto_principal.lower():
+        texto_bruto = (
+            f"{article_title}. {texto_principal}".strip(". ")
+            if texto_principal
+            else article_title
+        )
+    else:
+        texto_bruto = texto_principal
+
+    eng = registro.get("engagement") if isinstance(registro.get("engagement"), dict) else {}
+    stats = registro.get("stats") if isinstance(registro.get("stats"), dict) else {}
+
+    curtidas = converter_metrica_inteira(
+        eng.get("reactionsCount")
+        if eng.get("reactionsCount") is not None
+        else (
+            eng.get("likes")
+            if eng.get("likes") is not None
+            else (
+                stats.get("total_reactions")
+                if stats.get("total_reactions") is not None
+                else (
+                    stats.get("like")
+                    if stats.get("like") is not None
+                    else (
+                        registro.get("reactionsCount")
+                        if registro.get("reactionsCount") is not None
+                        else (
+                            registro.get("numLikes")
+                            if registro.get("numLikes") is not None
+                            else registro.get("totalReactionCount")
+                        )
+                    )
+                )
+            )
+        )
+    )
+
+    comentarios = converter_metrica_inteira(
+        eng.get("commentsCount")
+        if eng.get("commentsCount") is not None
+        else (
+            stats.get("comments")
+            if stats.get("comments") is not None
+            else (
+                registro.get("commentsCount")
+                if registro.get("commentsCount") is not None
+                else (
+                    registro.get("numComments")
+                    if registro.get("numComments") is not None
+                    else registro.get("totalCommentCount")
+                )
+            )
+        )
+    )
+
+    compartilhamentos = converter_metrica_inteira(
+        eng.get("repostsCount")
+        if eng.get("repostsCount") is not None
+        else (
+            stats.get("reposts")
+            if stats.get("reposts") is not None
+            else (
+                stats.get("shares")
+                if stats.get("shares") is not None
+                else (
+                    registro.get("repostsCount")
+                    if registro.get("repostsCount") is not None
+                    else (
+                        registro.get("numShares")
+                        if registro.get("numShares") is not None
+                        else registro.get("sharesCount")
+                    )
+                )
+            )
+        )
+    )
+
+    visualizacoes = converter_metrica_inteira(
+        eng.get("impressionsCount")
+        if eng.get("impressionsCount") is not None
+        else (
+            registro.get("impressionsCount")
+            if registro.get("impressionsCount") is not None
+            else registro.get("viewsCount")
+        )
+    )
+
+    posted_raw = (
+        registro.get("postedAt")
+        or registro.get("posted_at")
+        or registro.get("createdAt")
+        or registro.get("publishedAt")
+    )
+    if isinstance(posted_raw, dict):
+        posted_val = (
+            posted_raw.get("date")
+            or posted_raw.get("timestamp")
+            or posted_raw.get("datetime")
+        )
+    else:
+        posted_val = posted_raw
+    data_pub = converter_data_iso8601(posted_val)
+
+    url = (
+        registro.get("linkedinUrl")
+        or registro.get("post_url")
+        or registro.get("url")
+        or registro.get("postUrl")
+        or registro.get("shareUrl")
+    )
+
+    campos = {
+        **meta,
+        "tipo_registro": tipo_registro,
+        "id_registro": id_registro or None,
+        "id_publicacao": id_publicacao or None,
+        "texto": padronizar_texto(texto_bruto),
+        "data_publicacao": data_pub,
+        "curtidas": curtidas,
+        "comentarios": comentarios,
+        "compartilhamentos": compartilhamentos,
+        "visualizacoes": visualizacoes,
+        "url_publicacao": str(url).strip() if url else None,
+    }
+    return _finalizar_registro(campos)
+
+
 def _eh_registro_fora_de_escopo(item: Dict[str, Any]) -> bool:
     """
     Filtra publicações originadas em comunidades ou tópicos fora do escopo de software
@@ -558,7 +787,7 @@ def _eh_registro_fora_de_escopo(item: Dict[str, Any]) -> bool:
 
     texto_combinado = " ".join(
         str(item.get(k) or "")
-        for k in ("title", "description", "text", "body", "selfText", "caption")
+        for k in ("title", "description", "text", "body", "selfText", "caption", "content", "commentary")
     ).lower()
     for termo in TERMOS_FORA_DE_ESCOPO_ERP:
         if termo in texto_combinado:
@@ -570,12 +799,12 @@ def normalizar_registros(
     registros_youtube: Optional[Iterable[Dict[str, Any]]] = None,
     registros_instagram: Optional[Iterable[Dict[str, Any]]] = None,
     registros_reddit: Optional[Iterable[Dict[str, Any]]] = None,
+    registros_linkedin: Optional[Iterable[Dict[str, Any]]] = None,
 ) -> pd.DataFrame:
     """
-    Consolida os resultados das três plataformas em um único DataFrame padronizado,
-    extraindo também comentários públicos aninhados (como `latestComments` do Instagram
-    e `comments` do Reddit), aplicando tipagem correta de métricas inteiras nulas (Int64)
-    e removendo duplicidades com base em (plataforma, tipo_registro, id_registro).
+    Consolida os resultados das quatro plataformas em um único DataFrame padronizado,
+    extraindo também comentários públicos aninhados, aplicando tipagem correta de métricas
+    inteiras nulas (Int64) e removendo duplicidades com base em (plataforma, tipo_registro, id_registro).
     """
     linhas_normalizadas: List[Dict[str, Any]] = []
 
@@ -634,6 +863,29 @@ def normalizar_registros(
                         }
                         linhas_normalizadas.append(normalizar_reddit(comm_enriquecido))
 
+    if registros_linkedin:
+        for item in registros_linkedin:
+            if not isinstance(item, dict) or _eh_registro_fora_de_escopo(item):
+                continue
+            linhas_normalizadas.append(normalizar_linkedin(item))
+
+            nested_li_comments = item.get("comments")
+            if isinstance(nested_li_comments, list):
+                parent_id = item.get("id") or item.get("urn")
+                parent_url = item.get("linkedinUrl") or item.get("url") or item.get("post_url")
+                parent_meta = item.get("_coleta_meta")
+                for idx_c, comm in enumerate(nested_li_comments):
+                    if isinstance(comm, dict) and (comm.get("text") or comm.get("content")):
+                        comm_enriquecido = {
+                            **comm,
+                            "type": "comment",
+                            "id": comm.get("id") or f"{parent_id}_lic{idx_c + 1}",
+                            "postId": parent_id,
+                            "linkedinUrl": comm.get("linkedinUrl") or parent_url,
+                            "_coleta_meta": parent_meta,
+                        }
+                        linhas_normalizadas.append(normalizar_linkedin(comm_enriquecido))
+
     if not linhas_normalizadas:
         df_vazio = pd.DataFrame(columns=COLUNAS_MODELO_UNIFICADO)
         for col in COLUNAS_METRICAS_INTEIRAS:
@@ -646,6 +898,11 @@ def normalizar_registros(
 
     df = df.drop_duplicates(
         subset=["plataforma", "tipo_registro", "id_registro"], keep="first"
+    ).reset_index(drop=True)
+
+    # Remove republicações idênticas (mesmo texto na mesma plataforma e mesmo tipo de registro)
+    df = df.drop_duplicates(
+        subset=["plataforma", "tipo_registro", "texto"], keep="first"
     ).reset_index(drop=True)
 
     for col in COLUNAS_METRICAS_INTEIRAS:

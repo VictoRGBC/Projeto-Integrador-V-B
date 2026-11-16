@@ -1,6 +1,7 @@
 """
 Módulo central de configurações do Projeto Integrador V - B.
 Gerencia variáveis de ambiente, diretórios, palavras-chave e templates de Actors do Apify.
+Suporta 4 plataformas: YouTube, Instagram, Reddit e LinkedIn.
 """
 
 import json
@@ -24,6 +25,7 @@ RAW_DATA_DIR = DATA_DIR / "brutos"
 RAW_YOUTUBE_DIR = RAW_DATA_DIR / "youtube"
 RAW_INSTAGRAM_DIR = RAW_DATA_DIR / "instagram"
 RAW_REDDIT_DIR = RAW_DATA_DIR / "reddit"
+RAW_LINKEDIN_DIR = RAW_DATA_DIR / "linkedin"
 PROCESSED_DATA_DIR = DATA_DIR / "tratados"
 PROCESSED_CSV_PATH = PROCESSED_DATA_DIR / "dados_multiplataforma.csv"
 
@@ -39,6 +41,7 @@ for directory in [
     RAW_YOUTUBE_DIR,
     RAW_INSTAGRAM_DIR,
     RAW_REDDIT_DIR,
+    RAW_LINKEDIN_DIR,
     PROCESSED_DATA_DIR,
     ACTORS_CONFIG_DIR,
     LOGS_DIR,
@@ -60,6 +63,9 @@ APIFY_INSTAGRAM_ACTOR_ID: str = os.getenv(
 APIFY_REDDIT_ACTOR_ID: str = os.getenv(
     "APIFY_REDDIT_ACTOR_ID", "automation-lab/reddit-scraper"
 ).strip()
+APIFY_LINKEDIN_ACTOR_ID: str = os.getenv(
+    "APIFY_LINKEDIN_ACTOR_ID", "apimaestro/linkedin-posts-search-scraper-no-cookies"
+).strip()
 
 # Limites de itens por execução
 YOUTUBE_MAX_ITEMS: int = int(os.getenv("YOUTUBE_MAX_ITEMS", "20"))
@@ -67,6 +73,7 @@ YOUTUBE_MAX_COMMENTS: int = int(os.getenv("YOUTUBE_MAX_COMMENTS", "10"))
 INSTAGRAM_MAX_ITEMS: int = int(os.getenv("INSTAGRAM_MAX_ITEMS", "20"))
 REDDIT_MAX_ITEMS: int = int(os.getenv("REDDIT_MAX_ITEMS", "20"))
 REDDIT_MAX_COMMENTS: int = int(os.getenv("REDDIT_MAX_COMMENTS", "10"))
+LINKEDIN_MAX_ITEMS: int = int(os.getenv("LINKEDIN_MAX_ITEMS", "20"))
 
 # Parâmetros de controle de execução HTTP / Apify
 APIFY_TIMEOUT_SECONDS: int = int(os.getenv("APIFY_TIMEOUT_SECONDS", "180"))
@@ -103,7 +110,7 @@ HIVE_DATABASE: str = os.getenv("HIVE_DATABASE", "integra_mercado")
 def load_actor_config(platform: str) -> Dict[str, Any]:
     """
     Carrega o arquivo JSON de configuração de entrada do Actor para a plataforma informada.
-    Plataformas aceitas: 'youtube', 'instagram', 'reddit'.
+    Plataformas aceitas: 'youtube', 'instagram', 'reddit', 'linkedin'.
     """
     platform_key = platform.lower().strip()
     config_file = ACTORS_CONFIG_DIR / f"{platform_key}.json"
@@ -150,7 +157,7 @@ def validate_environment(require_token: bool = False) -> Dict[str, Any]:
             "Variável APIFY_API_TOKEN não está definida no arquivo .env."
         )
 
-    for platform in ("youtube", "instagram", "reddit"):
+    for platform in ("youtube", "instagram", "reddit", "linkedin"):
         cfg_path = ACTORS_CONFIG_DIR / f"{platform}.json"
         if not cfg_path.exists():
             issues.append(f"Arquivo de configuração ausente: {cfg_path}")
@@ -171,6 +178,7 @@ def validate_environment(require_token: bool = False) -> Dict[str, Any]:
             "youtube": APIFY_YOUTUBE_ACTOR_ID,
             "instagram": APIFY_INSTAGRAM_ACTOR_ID,
             "reddit": APIFY_REDDIT_ACTOR_ID,
+            "linkedin": APIFY_LINKEDIN_ACTOR_ID,
         },
         "keywords_count": len(get_search_keywords()),
         "issues": issues,

@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "platform": "LinkedIn",
+    "default_actor_id": "apimaestro/linkedin-posts-search-scraper-no-cookies",
+    "fallback_actor_id": "harvestapi/linkedin-post-search",
+    "description": "Configuração de entrada para busca pública de publicações corporativas B2B no LinkedIn por palavra-chave (sem exigência de cookies/login).",
+    "required_fields": [
+      "keyword",
+      "limit"
+    ]
+  },
+  "input_template": {
+    "keyword": "Sistema ERP",
+    "sort_type": "relevance",
+    "limit": 20,
+    "page_number": 1
+  }
+}

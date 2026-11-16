@@ -13,6 +13,7 @@ from config.settings import (
     PROCESSED_CSV_PATH,
     PROCESSED_DATA_DIR,
     RAW_INSTAGRAM_DIR,
+    RAW_LINKEDIN_DIR,
     RAW_REDDIT_DIR,
     RAW_YOUTUBE_DIR,
     get_logger,
@@ -59,28 +60,32 @@ def executar_tratamento_completo(
     raw_youtube_dir: Path = RAW_YOUTUBE_DIR,
     raw_instagram_dir: Path = RAW_INSTAGRAM_DIR,
     raw_reddit_dir: Path = RAW_REDDIT_DIR,
+    raw_linkedin_dir: Path = RAW_LINKEDIN_DIR,
     output_csv_path: Path = PROCESSED_CSV_PATH,
 ) -> pd.DataFrame:
     """
-    Carrega os JSONs brutos das três plataformas, normaliza, classifica sentimentos e temas,
+    Carrega os JSONs brutos das quatro plataformas, normaliza, classifica sentimentos e temas,
     remove duplicidades e salva o CSV final consolidado em UTF-8-SIG (Seção 4.4).
     """
     logger.info("Iniciando carregamento dos dados brutos multiplataforma...")
     brutos_yt = carregar_json_brutos_plataforma(raw_youtube_dir)
     brutos_ig = carregar_json_brutos_plataforma(raw_instagram_dir)
     brutos_rd = carregar_json_brutos_plataforma(raw_reddit_dir)
+    brutos_li = carregar_json_brutos_plataforma(raw_linkedin_dir)
 
     logger.info(
-        "Registros brutos lidos -> YouTube: %d | Instagram: %d | Reddit: %d",
+        "Registros brutos lidos -> YouTube: %d | Instagram: %d | Reddit: %d | LinkedIn: %d",
         len(brutos_yt),
         len(brutos_ig),
         len(brutos_rd),
+        len(brutos_li),
     )
 
     df_consolidado = normalizar_registros(
         registros_youtube=brutos_yt,
         registros_instagram=brutos_ig,
         registros_reddit=brutos_rd,
+        registros_linkedin=brutos_li,
     )
 
     output_csv_path.parent.mkdir(parents=True, exist_ok=True)

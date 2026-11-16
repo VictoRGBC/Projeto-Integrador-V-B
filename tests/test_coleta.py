@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 from coleta.apify_client import ApifyClientError, ApifyIntegrationClient
 from coleta.coletar_instagram import build_instagram_input, coletar_instagram
+from coleta.coletar_linkedin import build_linkedin_input, coletar_linkedin
 from coleta.coletar_reddit import build_reddit_input, coletar_reddit
 from coleta.coletar_youtube import build_youtube_input, coletar_youtube
 
@@ -53,6 +54,15 @@ def test_platform_specific_inputs():
     assert rd_in["searchQuery"] == "Implantação de ERP"
     assert rd_in["maxPostsPerSource"] == 25
     assert rd_in["maxCommentsPerPost"] == 8
+
+    li_in = build_linkedin_input(
+        "Sistema ERP",
+        max_items=15,
+        actor_id="apimaestro/linkedin-posts-search-scraper-no-cookies",
+    )
+    assert li_in["keyword"] == "Sistema ERP"
+    assert li_in["limit"] == 15
+    assert li_in["sort_type"] == "relevance"
 
 
 def test_validate_input_parameters_raises_on_missing():

@@ -16,6 +16,7 @@ import sys
 from typing import Any, Dict
 
 from coleta.coletar_instagram import coletar_instagram
+from coleta.coletar_linkedin import coletar_linkedin
 from coleta.coletar_reddit import coletar_reddit
 from coleta.coletar_youtube import coletar_youtube
 from config.settings import get_logger, get_search_keywords, validate_environment
@@ -69,16 +70,22 @@ def etapa_coleta_multiplataforma(skip_existing: bool = True) -> Dict[str, Any]:
     res_rd = coletar_reddit(keywords=keywords, skip_existing=skip_existing)
     executar_tratamento_completo()
 
+    logger.info("Etapa 5: Executando coleta no LinkedIn...")
+    res_li = coletar_linkedin(keywords=keywords, skip_existing=skip_existing)
+    executar_tratamento_completo()
+
     total_geral = (
         res_yt.get("total_items", 0)
         + res_ig.get("total_items", 0)
         + res_rd.get("total_items", 0)
+        + res_li.get("total_items", 0)
     )
     logger.info(
-        "Etapa 5 concluída: Dados brutos salvos. Total coletado -> YouTube: %d | Instagram: %d | Reddit: %d (Total: %d)",
+        "Coleta concluída: Dados brutos salvos. Total coletado -> YouTube: %d | Instagram: %d | Reddit: %d | LinkedIn: %d (Total: %d)",
         res_yt.get("total_items", 0),
         res_ig.get("total_items", 0),
         res_rd.get("total_items", 0),
+        res_li.get("total_items", 0),
         total_geral,
     )
 
@@ -86,6 +93,7 @@ def etapa_coleta_multiplataforma(skip_existing: bool = True) -> Dict[str, Any]:
         "youtube": res_yt,
         "instagram": res_ig,
         "reddit": res_rd,
+        "linkedin": res_li,
         "total_items": total_geral,
     }
 

@@ -144,51 +144,70 @@ ORDER BY total_mencoes_implantacao DESC;
 
 -- -----------------------------------------------------------------------------
 -- CONSULTA 10 (ADICIONAL) — Registros com maior quantidade de curtidas ou votos
--- Objetivo: Listar os registros de maior destaque dentro de cada plataforma
+-- Objetivo: Listar os Top 5 registros de maior destaque dentro de CADA plataforma
 -- (sem comparar diretamente métricas incompatíveis entre plataformas distintas).
 -- -----------------------------------------------------------------------------
 SELECT
     plataforma,
+    ranking_plataforma,
     tipo_registro,
     palavra_chave,
     assunto,
     sentimento,
-    CAST(NULLIF(TRIM(CAST(curtidas AS STRING)), '') AS BIGINT) AS curtidas_ou_votos,
+    curtidas_ou_votos,
     url_publicacao,
-    SUBSTR(texto, 1, 140) AS resumo_texto
-FROM inteligencia_mercado_social
-WHERE NULLIF(TRIM(CAST(curtidas AS STRING)), '') IS NOT NULL
-ORDER BY plataforma ASC, curtidas_ou_votos DESC
-LIMIT 30;
+    resumo_texto
+FROM (
+    SELECT
+        plataforma,
+        tipo_registro,
+        palavra_chave,
+        assunto,
+        sentimento,
+        CAST(NULLIF(TRIM(CAST(curtidas AS STRING)), '') AS BIGINT) AS curtidas_ou_votos,
+        url_publicacao,
+        SUBSTR(texto, 1, 140) AS resumo_texto,
+        ROW_NUMBER() OVER (
+            PARTITION BY plataforma
+            ORDER BY CAST(NULLIF(TRIM(CAST(curtidas AS STRING)), '') AS BIGINT) DESC
+        ) AS ranking_plataforma
+    FROM inteligencia_mercado_social
+    WHERE NULLIF(TRIM(CAST(curtidas AS STRING)), '') IS NOT NULL
+) ranked_posts
+WHERE ranking_plataforma <= 5
+ORDER BY plataforma ASC, ranking_plataforma ASC;
 
 -- -----------------------------------------------------------------------------
 -- CONSULTA 11 (ADICIONAL) — Funcionalidades e módulos mais demandados no mercado
--- Objetivo: Identificar os módulos e funcionalidades de ERP mais citados para
+-- Objetivo: Identificar os módulos e funcionalidades individuais de ERP mais citados
+-- (com desmembramento multivalorado e cálculo do Score de Criticidade ICP) para
 -- orientar o roadmap de produto da Integra Engenharia de Sistemas.
 -- -----------------------------------------------------------------------------
 SELECT
-    funcionalidades,
-    COUNT(*) AS total_registros,
+    funcionalidade_individual AS funcionalidade,
+    COUNT(*) AS total_mencoes,
     SUM(CASE WHEN sentimento = 'Positivo' THEN 1 ELSE 0 END) AS positivos,
-    SUM(CASE WHEN sentimento = 'Negativo' THEN 1 ELSE 0 END) AS negativos
-FROM inteligencia_mercado_social
-WHERE funcionalidades IS NOT NULL AND funcionalidades <> ''
-GROUP BY funcionalidades
-ORDER BY total_registros DESC
-LIMIT 20;
+    SUM(CASE WHEN sentimento = 'Negativo' THEN 1 ELSE 0 END) AS negativos,
+    SUM(CASE WHEN sentimento = 'Neutro' THEN 1 ELSE 0 END) AS neutros,
+    ROUND(SUM(CASE WHEN sentimento = 'Negativo' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS taxa_atrito_pct,
+    ROUND(COUNT(*) + 1.5 * SUM(CASE WHEN sentimento = 'Negativo' THEN 1 ELSE 0 END), 1) AS score_icp
+FROM inteligencia_funcionalidades_explodidas
+GROUP BY funcionalidade_individual
+ORDER BY total_mencoes DESC, score_icp DESC;
 
 -- -----------------------------------------------------------------------------
 -- CONSULTA 12 (ADICIONAL) — Principais dores e dificuldades operacionais relatadas
--- Objetivo: Mapear os gargalos mais frequentes dos usuários de sistemas empresariais.
+-- Objetivo: Mapear os gargalos individuais mais frequentes dos usuários de sistemas
+-- empresariais (com Taxa de Atrito e Score de Criticidade ICP).
 -- -----------------------------------------------------------------------------
 SELECT
-    dores_relatadas,
-    COUNT(*) AS total_registros,
-    SUM(CASE WHEN sentimento = 'Negativo' THEN 1 ELSE 0 END) AS relatos_negativos
-FROM inteligencia_mercado_social
-WHERE dores_relatadas IS NOT NULL
-  AND dores_relatadas <> ''
-  AND dores_relatadas <> 'Sem dor específica relatada'
-GROUP BY dores_relatadas
-ORDER BY total_registros DESC
-LIMIT 20;
+    dor_individual AS dor_operacional,
+    COUNT(*) AS total_mencoes,
+    SUM(CASE WHEN sentimento = 'Positivo' THEN 1 ELSE 0 END) AS positivos,
+    SUM(CASE WHEN sentimento = 'Negativo' THEN 1 ELSE 0 END) AS relatos_negativos,
+    SUM(CASE WHEN sentimento = 'Neutro' THEN 1 ELSE 0 END) AS neutros,
+    ROUND(SUM(CASE WHEN sentimento = 'Negativo' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS taxa_atrito_pct,
+    ROUND(COUNT(*) + 1.5 * SUM(CASE WHEN sentimento = 'Negativo' THEN 1 ELSE 0 END), 1) AS score_icp
+FROM inteligencia_dores_explodidas
+GROUP BY dor_individual
+ORDER BY total_mencoes DESC, score_icp DESC;

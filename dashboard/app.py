@@ -1,8 +1,9 @@
 """
 Dashboard Executivo de Inteligência de Mercado Multiplataforma — Integra Engenharia de Sistemas.
 Desenvolvido com Streamlit e Plotly (Seção 8).
-Inclui análise aprofundada de assuntos mais falados, funcionalidades a implementar,
-dores operacionais do mercado e matriz de recomendações para a Integra.
+Inclui análise aprofundada de assuntos mais falados, funcionalidades a implementar (com Score ICP),
+dores operacionais do mercado, matriz Causa-Efeito (Dor x Funcionalidade), diagnóstico por canal
+e matriz de recomendações para a Integra.
 """
 
 from pathlib import Path
@@ -21,12 +22,13 @@ from config.settings import HIVE_DIR, PROCESSED_CSV_PATH
 from hadoop.scripts.enviar_hdfs import executar_fluxo_hdfs
 from hive.executar_hive import (
     HIVE_RESULTS_DIR,
-    NOMES_CONSULTAS,
     executar_fluxo_hive,
     verificar_hive_disponivel,
 )
 from processamento.gerar_insights import (
     explodir_campo_multivalorado,
+    gerar_analise_canais,
+    gerar_matriz_dor_vs_funcionalidade,
     gerar_plano_recomendacoes,
     gerar_sintese_executiva,
 )
@@ -42,6 +44,7 @@ CORES_PLATAFORMA = {
     "YouTube": "#FF0000",
     "Instagram": "#E1306C",
     "Reddit": "#FF4500",
+    "LinkedIn": "#0A66C2",
 }
 
 
@@ -115,7 +118,7 @@ def renderizar_dashboard() -> None:
             </h2>
             <p style="margin: 0.35rem 0 0 0; color: #94A3B8; font-size: 0.95rem;">
                 <strong>Integra Engenharia de Sistemas</strong> &bull; PUC Goiás &bull; Projeto Integrador V – B
-                (YouTube, Instagram &amp; Reddit &rarr; Apify &rarr; Hadoop/HDFS &rarr; Apache Hive)
+                (YouTube, Instagram, Reddit &amp; LinkedIn &rarr; Apify &rarr; Hadoop/HDFS &rarr; Apache Hive)
             </p>
         </div>
         """,
@@ -193,7 +196,7 @@ def renderizar_dashboard() -> None:
         st.divider()
         st.info(
             "ℹ️ **Nota Metodológica:** A classificação de sentimentos, assuntos, funcionalidades e dores "
-            "utiliza **heurística exploratória baseada em léxico de palavras-chave e expressões contextuais**. "
+            "utiliza **heurística exploratória multilíngue (PT/EN/ES) baseada em léxico de domínio e expressões contextuais**. "
             "Os dados representam uma amostra pública exploratória do mercado de sistemas "
             "de gestão (ERP) e não constituem opinião direta sobre a Integra Engenharia de Sistemas."
         )
@@ -215,14 +218,14 @@ def renderizar_dashboard() -> None:
 
     aba1, aba2, aba3 = st.tabs(
         [
-            "📈 ABA 1 — Visão Geral",
-            "🎯 ABA 2 — Análise de Mercado, Funcionalidades e Recomendações",
-            "📋 ABA 3 — Detalhamento e Consultas HiveQL",
+            "📈 ABA 1 — Visão Geral e Diagnóstico por Canal",
+            "🎯 ABA 2 — Inteligência de Mercado, Funcionalidades e Recomendações",
+            "📋 ABA 3 — Auditoria de Dados e Consultas HiveQL",
         ]
     )
 
     # =========================================================================
-    # ABA 1 — VISÃO GERAL
+    # ABA 1 — VISÃO GERAL E DIAGNÓSTICO POR CANAL
     # =========================================================================
     with aba1:
         total_registros = len(df)
@@ -251,7 +254,7 @@ def renderizar_dashboard() -> None:
 
         # Destaques Executivos Rápidos
         st.markdown("#### 💡 Destaques Executivos Extraídos da Amostra")
-        d1, d2, d3 = st.columns(3)
+        d1, d2, d3, d4 = st.columns(4)
         with d1:
             st.success(
                 f"**Assunto Mais Falado:**\n\n{sintese['assunto_lider']} "
@@ -266,6 +269,12 @@ def renderizar_dashboard() -> None:
             st.warning(
                 f"**Principal Dor / Gargalo Identificado:**\n\n{sintese['dor_lider']} "
                 f"({sintese['dor_lider_qtd']} menções)"
+            )
+        with d4:
+            st.info(
+                f"**Cobertura Analítica Específica:**\n\n"
+                f"Temas: **{sintese['cobertura_tematica_pct']}%** | "
+                f"Módulos ERP: **{sintese['cobertura_funcional_pct']}%**"
             )
 
         st.divider()
@@ -335,8 +344,17 @@ def renderizar_dashboard() -> None:
             color_discrete_map=CORES_SENTIMENTO,
             text_auto=True,
         )
-        fig_kw.update_layout(height=420, yaxis={"categoryorder": "total ascending"})
+        fig_kw.update_layout(height=400, yaxis={"categoryorder": "total ascending"})
         st.plotly_chart(fig_kw, use_container_width=True)
+
+        st.divider()
+        st.markdown("#### 🌐 Diagnóstico Comportamental e Estratégico por Canal")
+        st.caption(
+            "Síntese comparativa do comportamento temático, polaridade, demandas de produto e dores predominantes em cada mídia social."
+        )
+        df_canais = gerar_analise_canais(df)
+        if not df_canais.empty:
+            st.dataframe(df_canais, use_container_width=True, hide_index=True)
 
     # =========================================================================
     # ABA 2 — ANÁLISE DE MERCADO, FUNCIONALIDADES E RECOMENDAÇÕES
@@ -366,7 +384,7 @@ def renderizar_dashboard() -> None:
                 color_discrete_map=CORES_SENTIMENTO,
                 text_auto=True,
             )
-            fig_temas.update_layout(height=410, yaxis={"categoryorder": "total ascending"})
+            fig_temas.update_layout(height=420, yaxis={"categoryorder": "total ascending"})
             st.plotly_chart(fig_temas, use_container_width=True)
 
         with col_m2:
@@ -382,11 +400,14 @@ def renderizar_dashboard() -> None:
                     labels={
                         "mencoes": "Menções nos Registros",
                         "item": "Dor / Gargalo Identificado",
+                        "taxa_atrito_pct": "Taxa de Atrito (% Negativo)",
+                        "score_prioridade": "Score de Criticidade (ICP)",
                     },
+                    hover_data=["percentual_registros", "negativos", "taxa_atrito_pct", "score_prioridade"],
                     text_auto=True,
                     color_discrete_sequence=["#DC2626"],
                 )
-                fig_dif.update_layout(height=410)
+                fig_dif.update_layout(height=420)
                 st.plotly_chart(fig_dif, use_container_width=True)
             else:
                 st.info("Não foram identificadas dores específicas no recorte selecionado.")
@@ -407,36 +428,65 @@ def renderizar_dashboard() -> None:
                     labels={
                         "mencoes": "Total de Menções",
                         "item": "Módulo / Funcionalidade",
+                        "score_prioridade": "Score ICP",
                     },
+                    hover_data=["percentual_registros", "positivos", "negativos", "taxa_atrito_pct", "score_prioridade"],
                     text_auto=True,
                     color_discrete_sequence=["#0284C7"],
                 )
-                fig_func.update_layout(height=420)
+                fig_func.update_layout(height=440)
                 st.plotly_chart(fig_func, use_container_width=True)
 
             with col_f2:
-                st.markdown("##### Detalhamento de Demanda por Funcionalidade")
+                st.markdown("##### Detalhamento de Demanda e Score ICP por Módulo")
                 st.dataframe(
                     df_func.rename(
                         columns={
                             "item": "Funcionalidade / Módulo",
                             "mencoes": "Menções",
-                            "percentual_registros": "% dos Registros",
-                            "positivos": "Positivos",
-                            "negativos": "Negativos",
-                            "neutros": "Neutros",
+                            "percentual_registros": "% Base",
+                            "positivos": "Pos",
+                            "negativos": "Neg",
+                            "neutros": "Neu",
+                            "taxa_atrito_pct": "% Atrito",
+                            "score_prioridade": "Score ICP",
                         }
                     ),
                     use_container_width=True,
-                    height=380,
+                    height=400,
                     hide_index=True,
                 )
 
         st.divider()
-        st.subheader("3. Recomendações Estratégicas e Roadmap para a Integra Engenharia de Sistemas")
+        st.subheader("3. Matriz Causa-Efeito: Dores do Mercado × Funcionalidades de ERP Demandadas")
         st.caption(
-            "Matriz gerada automaticamente a partir das funcionalidades mais discutidas e das dores "
-            "identificadas na amostra multiplataforma."
+            "Cruza as dores operacionais relatadas com os módulos de software mencionados no mesmo contexto, "
+            "revelando quais funcionalidades resolvem diretamente cada gargalo do mercado."
+        )
+        df_matriz = gerar_matriz_dor_vs_funcionalidade(df)
+        if not df_matriz.empty:
+            pivot_matriz = df_matriz.pivot(
+                index="dor", columns="funcionalidade", values="ocorrencias"
+            ).fillna(0).astype(int)
+            fig_heat = px.imshow(
+                pivot_matriz,
+                text_auto=True,
+                aspect="auto",
+                color_continuous_scale="Blues",
+                labels={
+                    "x": "Funcionalidade / Módulo de ERP Demandado",
+                    "y": "Dor / Gargalo Operacional Relatado",
+                    "color": "Coocorrências",
+                },
+                title="Mapa de Calor: Coocorrência entre Dores Operacionais e Módulos de ERP",
+            )
+            fig_heat.update_layout(height=460)
+            st.plotly_chart(fig_heat, use_container_width=True)
+
+        st.divider()
+        st.subheader("4. Recomendações Estratégicas e Roadmap para a Integra Engenharia de Sistemas")
+        st.caption(
+            "Matriz priorizada pelo volume de demanda e pelo Índice de Criticidade e Prioridade (ICP = Menções + 1,5 × Relatos Críticos)."
         )
         df_recomendacoes = gerar_plano_recomendacoes(df)
         if not df_recomendacoes.empty:
@@ -447,7 +497,7 @@ def renderizar_dashboard() -> None:
             )
 
         st.divider()
-        st.subheader("4. Comparativo entre Plataformas e Evolução Temporal")
+        st.subheader("5. Comparativo entre Plataformas e Evolução Temporal")
         col_m3, col_m4 = st.columns(2)
 
         with col_m3:
@@ -512,21 +562,29 @@ def renderizar_dashboard() -> None:
             "Nota técnica (Seção 4.2): Curtidas no YouTube/Instagram, votos positivos (upvotes) no Reddit e "
             "visualizações possuem semânticas distintas e são apresentados separadamente por plataforma."
         )
-        cols_eng = st.columns(3)
-        for idx, plat_nome in enumerate(["YouTube", "Instagram", "Reddit"]):
+        cols_eng = st.columns(4)
+        for idx, plat_nome in enumerate(["YouTube", "Instagram", "Reddit", "LinkedIn"]):
             df_p = df[df["plataforma"] == plat_nome]
             with cols_eng[idx]:
                 st.markdown(f"#### {plat_nome}")
                 if df_p.empty:
                     st.caption(f"Sem registros de {plat_nome} para os filtros atuais.")
                 else:
-                    label_like = "Upvotes (Votos)" if plat_nome == "Reddit" else "Curtidas (Likes)"
+                    if plat_nome == "Reddit":
+                        label_like = "Upvotes (Votos)"
+                    elif plat_nome == "LinkedIn":
+                        label_like = "Reações B2B (Likes)"
+                    else:
+                        label_like = "Curtidas (Likes)"
                     soma_likes = df_p["curtidas"].dropna().sum()
                     soma_coms = df_p["comentarios"].dropna().sum()
+                    soma_shares = df_p["compartilhamentos"].dropna().sum()
                     soma_views = df_p["visualizacoes"].dropna().sum()
                     st.write(f"- **Total de registros:** {len(df_p):,}".replace(",", "."))
                     st.write(f"- **{label_like}:** {int(soma_likes):,}".replace(",", "."))
                     st.write(f"- **Comentários reportados:** {int(soma_coms):,}".replace(",", "."))
+                    if not df_p["compartilhamentos"].dropna().empty:
+                        st.write(f"- **Compartilhamentos/Reposts:** {int(soma_shares):,}".replace(",", "."))
                     if not df_p["visualizacoes"].dropna().empty:
                         st.write(f"- **Visualizações:** {int(soma_views):,}".replace(",", "."))
                     else:

@@ -9,7 +9,7 @@
 
 ## 1. Apresentação do Projeto
 
-Este repositório contém a solução computacional desenvolvida para a disciplina **Projeto Integrador V – B** do curso de Big Data e Inteligência Artificial da PUC Goiás. O sistema realiza a coleta, normalização, classificação heurística exploratória, armazenamento distribuído em **Apache Hadoop (HDFS)**, análise estruturada em **Apache Hive (HiveQL)** e visualização executiva em **Streamlit e Plotly** a partir de dados públicos provenientes de três plataformas de mídias sociais: **YouTube**, **Instagram** e **Reddit**.
+Este repositório contém a solução computacional desenvolvida para a disciplina **Projeto Integrador V – B** do curso de Big Data e Inteligência Artificial da PUC Goiás. O sistema realiza a coleta, normalização, classificação heurística exploratória multilíngue (PT/EN/ES), armazenamento distribuído em **Apache Hadoop (HDFS)**, análise estruturada em **Apache Hive (HiveQL)** e visualização executiva em **Streamlit e Plotly** a partir de dados públicos provenientes de quatro plataformas de mídias sociais: **YouTube**, **Instagram**, **LinkedIn** e **Reddit**.
 
 ---
 
@@ -43,9 +43,11 @@ Desenvolver uma arquitetura de Big Data capaz de coletar, tratar, armazenar no H
 1. Integrar a coleta multiplataforma por meio da API oficial do **Apify** com configurações independentes por Actor;
 2. Padronizar e consolidar esquemas heterogêneos em um modelo analítico unificado com **Pandas**;
 3. Aplicar classificação heurística exploratória de sentimentos e categorias temáticas;
-4. Armazenar os arquivos brutos e tratados no **Apache Hadoop / HDFS** via Docker Compose;
-5. Executar consultas analíticas em **HiveQL** sobre tabela externa no **Apache Hive**;
-6. Disponibilizar um dashboard executivo interativo com **Streamlit** e **Plotly**.
+4. Armazenar os arquivos brutos e tratados no **Apache Hadoop / HDFS** (modo local/standalone ou nativo, sem dependência de Docker);
+5. Executar **12 consultas analíticas em HiveQL** sobre tabela externa no **Apache Hive**;
+6. Disponibilizar um dashboard executivo interativo com **Streamlit** e **Plotly** com mapeamento de assuntos mais falados, funcionalidades demandadas, dores do mercado e recomendações para a Integra.
+
+> **Relatório Técnico Completo:** O relatório acadêmico completo do projeto (seguindo o padrão da PUC Goiás / Projeto Integrador V – B e articulado com o histórico do Projeto Integrador V – A) está disponível em **[docs/RELATORIO_PROJETO_INTEGRADOR_V_B.md](file:///c:/Users/INTEGRA/Documents/GitHub/Projeto-Integrador_V_B/docs/RELATORIO_PROJETO_INTEGRADOR_V_B.md)**.
 
 ---
 
@@ -118,6 +120,7 @@ Cada plataforma utiliza um Actor específico verificado na Apify Store, com seu 
 |---|---|---|---|
 | **YouTube** | `streamers/youtube-scraper` e `streamers/youtube-comments-scraper` | `config/actors/youtube.json` | Pesquisa vídeos por `searchQueries` e coleta metadados e comentários públicos |
 | **Instagram** | `apify/instagram-hashtag-scraper` (e `apify/instagram-scraper`) | `config/actors/instagram.json` | Pesquisa publicações públicas por hashtags/termos de negócio (`hashtags`) e extrai legendas, métricas e `latestComments` |
+| **LinkedIn** | `apimaestro/linkedin-posts-search-scraper-no-cookies` | `config/actors/linkedin.json` | Pesquisa publicações corporativas B2B e artigos executivos por palavras-chave sem necessidade de cookies |
 | **Reddit** | `automation-lab/reddit-scraper` | `config/actors/reddit.json` | Pesquisa publicações e comentários públicos via `searchQuery` sem exigir `sessionToken` |
 
 ### Palavras-chave iniciais configuradas
@@ -229,10 +232,14 @@ Os arquivos HiveQL estão organizados em:
 
 ## 15. Execução do Dashboard (Streamlit e Plotly)
 
-O dashboard pode ser iniciado a qualquer momento, reutilizando os dados já coletados e tratados sem exigir nova coleta:
+O dashboard pode ser iniciado diretamente pelos scripts de inicialização na raiz do projeto (que configuram automaticamente o ambiente Python no Windows) ou via Streamlit:
 
-```bash
-streamlit run dashboard/app.py
+```powershell
+.\iniciar_dashboard.ps1
+```
+ou:
+```cmd
+.\iniciar_dashboard.bat
 ```
 
 ### Estrutura das Abas:
@@ -244,7 +251,7 @@ streamlit run dashboard/app.py
 
 ## 16. Testes e Validação
 
-Para executar a suíte completa de testes unitários (19 testes cobrindo configuração, coletores Apify, normalização de YouTube/Instagram/Reddit, tratamento de nulos, deduplicação, classificação heurística, estrutura HDFS/HiveQL e filtros do dashboard):
+Para executar a suíte completa de testes unitários (26 testes cobrindo configuração, coletores Apify das 4 plataformas, normalização de YouTube/Instagram/LinkedIn/Reddit, tratamento de nulos, deduplicação, classificação heurística multilíngue, Score ICP, Matriz Causa-Efeito, estrutura HDFS/HiveQL e filtros do dashboard):
 
 ```bash
 python tests/run_all_tests.py

@@ -21,6 +21,16 @@ from config.settings import (
 
 logger = get_logger("coleta.coletar_reddit")
 
+# Mapeamento de consultas para garantir foco no domínio de sistemas ERP no Reddit
+KEYWORD_REDDIT_QUERY_MAP: Dict[str, str] = {
+    "software de gestão empresarial": "ERP software business",
+    "software de gestao empresarial": "ERP software business",
+    "suporte técnico de sistemas": "ERP support implementation",
+    "suporte tecnico de sistemas": "ERP support implementation",
+    "automação empresarial": "ERP automation workflow",
+    "automacao empresarial": "ERP automation workflow",
+}
+
 
 def build_reddit_input(
     keyword: str,
@@ -33,9 +43,12 @@ def build_reddit_input(
     - `automation-lab/reddit-scraper`: usa `searchQuery`, `maxPostsPerSource`, `maxCommentsPerPost`.
     - `trudax/reddit-scraper-lite`: usa `searches`, `maxItems`, `maxComments`.
     """
+    kw_clean = keyword.strip()
+    search_term = KEYWORD_REDDIT_QUERY_MAP.get(kw_clean.lower(), kw_clean)
+
     if "trudax" in actor_id.lower():
         return {
-            "searches": [keyword.strip()],
+            "searches": [search_term],
             "sort": "new",
             "time": "all",
             "maxItems": int(max_items),
@@ -46,7 +59,7 @@ def build_reddit_input(
 
     config = load_actor_config("reddit")
     payload = copy.deepcopy(config["input_template"])
-    payload["searchQuery"] = keyword.strip()
+    payload["searchQuery"] = search_term
     payload["maxPostsPerSource"] = int(max_items)
     payload["maxCommentsPerPost"] = int(max_comments)
     return payload

@@ -24,6 +24,7 @@ def test_hdfs_directory_structure_matches_spec():
     assert "/projeto_integrador/dados_brutos/youtube" in HDFS_DIRECTORIES
     assert "/projeto_integrador/dados_brutos/instagram" in HDFS_DIRECTORIES
     assert "/projeto_integrador/dados_brutos/reddit" in HDFS_DIRECTORIES
+    assert "/projeto_integrador/dados_brutos/linkedin" in HDFS_DIRECTORIES
     assert "/projeto_integrador/dados_tratados/multiplataforma" in HDFS_DIRECTORIES
 
 
@@ -32,7 +33,7 @@ def test_hdfs_operations_without_docker():
     with tempfile.TemporaryDirectory() as tmpdir:
         hdfs_root = Path(tmpdir) / "hdfs_storage"
         criados = criar_diretorios_hdfs(root_dir=hdfs_root)
-        assert len(criados) == 4
+        assert len(criados) == 5
 
         sample_file = Path(tmpdir) / "dados_multiplataforma.csv"
         sample_file.write_text("plataforma,id_registro\nYouTube,yt1\n", encoding="utf-8")
